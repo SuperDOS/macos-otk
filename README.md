@@ -148,7 +148,7 @@ The installer extracts this directly into `/Library/Application Support/Microsof
 
 At install time the contents land in `Swift Dialog/icons/` and SwiftDialog references them by filename. Icons are non-critical - a missing `icons.zip` will only warn, not fail the run.
 
-**3. Author your `apps.json`** - fastest path is to open `json-builder/macos-deployment-builder.html` in a browser, click **Load Example Data**, edit, then **Download**. The exported file is the exact shape the orchestrator consumes.
+**3. Author your `apps.json`** - fastest path is to open `json-builder/macos-deployment-builder.html` in a browser, click **Load Example Data**, edit, then **Download**. The exported file is the exact shape the orchestrator consumes. Alternatively, start from [`apps.example.json`](apps.example.json) in this repo - a validated, fully-commented-by-structure example showing prerequisites, multi-URL fallbacks, detection, `custom_variables`, groups, and the built-in custom commands (replace every `YOUR_HOST` placeholder).
 
 **4. Upload all three to the same host.** They don't have to share a folder, but the URLs need to be reachable over HTTPS from the Mac during onboarding.
 

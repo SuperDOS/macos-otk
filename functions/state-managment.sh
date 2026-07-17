@@ -14,9 +14,11 @@ extract_command_name() {
 
   # If command starts with $(), extract the first word inside
   if [[ "$full_command" == \$\(* ]]; then
-    # Remove leading '$(' and trailing ')'
+    # Remove leading '$(' and trailing ')'. NOTE: must stay bash-3.2 safe -
+    # ${var::-1} (negative length) is bash 4.2+ and fatally errors on the
+    # macOS system bash; use suffix stripping instead.
     local inner_command="${full_command:2}"
-    [[ "${inner_command: -1}" == ")" ]] && inner_command="${inner_command::-1}"
+    inner_command="${inner_command%)}"
 
     # Extract first word from the inner command
     echo "$inner_command" | awk '{print $1}'
@@ -153,10 +155,16 @@ get_installation_state() {
       [[ -z "$command" ]] && continue
       command_found=true
 
+      # Only treat the text before the first colon as a context prefix when
+      # it is literally root/user - otherwise a bare command containing a
+      # colon (e.g. "curl https://x") would be mangled into prefix + tail.
       local prefix="${command%%:*}"
-      local actual_command="${command#*:}"
+      local actual_command="$command"
       local run_as_user=false
-      [[ "$prefix" == "user" ]] && run_as_user=true
+      if [[ "$prefix" == "root" || "$prefix" == "user" ]]; then
+        actual_command="${command#*:}"
+        [[ "$prefix" == "user" ]] && run_as_user=true
+      fi
 
       execute_detection_command "$actual_command" "$run_as_user" "$item_id"
       local exit_code=$?
@@ -413,14 +421,17 @@ cleanup_stale_plists() {
   #
   # 1. Build valid ID list from apps.json
   #
+  # Prerequisites get state plists too (their detection path writes them) -
+  # include their ids, or every run deletes them as "stale" and re-detects.
   local valid_ids
   valid_ids=$(jq -r '
-      .items[] |
-      if .type == "group" then
-        .id, (.apps[].id)
-      else
-        .id
-      end
+      (.items[] |
+        if .type == "group" then
+          .id, (.apps[].id)
+        else
+          .id
+        end),
+      (.prerequisites[]?.id // empty)
     ' "$APPS_JSON" | sort -u)
 
   #

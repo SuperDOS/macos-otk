@@ -531,13 +531,14 @@ EOF
   done
 
   # --------------- Resolve user context ---------------
+  # Console user first: under a root: command $USER is "root", which would
+  # silently configure root's Dock instead of the logged-in user's.
   local current_user
   if [[ -n "$__user_override" ]]; then
     current_user="$__user_override"
-  elif [[ -n "$USER" ]]; then
-    current_user="$USER"
   else
     current_user=$(scutil <<<"show State:/Users/ConsoleUser" | awk '/Name :/ && !/loginwindow/ { print $3 }')
+    [[ -z "$current_user" && -n "$USER" && "$USER" != "root" ]] && current_user="$USER"
   fi
 
   if [[ "$current_user" == "loginwindow" || -z "$current_user" ]]; then
@@ -552,8 +553,10 @@ EOF
     return 1
   fi
 
+  # dscl, not `eval echo ~user` - eval would expand any shell metacharacters
+  # in the username (same fix as the installer engine's home lookup).
   local user_home
-  user_home=$(eval echo "~$current_user")
+  user_home=$(dscl . -read "/Users/$current_user" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
   if [[ ! -d "$user_home" ]]; then
     echo "User home directory not found: $user_home"
     return 1

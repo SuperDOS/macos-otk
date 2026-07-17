@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =============================================================================
-# DOWNLOAD MANAGER with Progress Tracking
+# DOWNLOAD MANAGER + UNIFIED INSTALLATION ENGINE
 # =============================================================================
 
 is_application_installed() {
@@ -111,7 +111,7 @@ download_with_redirects() {
   fi
 
   # Create unique temporary files to avoid conflicts
-  local session_id="$$_$(date +%s%N)"
+  local session_id="$$_$(date +%s)"
   local headers_file="$TEMP_DIR/headers_${session_id}.txt"
   local cookie_jar="$TEMP_DIR/cookies_${session_id}.txt"
 
@@ -252,21 +252,16 @@ process_app() {
   log_info "Processing app: $app_name ($app_type) [ID: $item_id]"
 
   if is_application_installed "$app_config"; then
-    local status_msg="Already installed"
-    [[ "$app_type" == "config" ]] && status_msg="Already configured"
-
-    ((skipped_count++))
-    return
+    skipped_count=$((skipped_count + 1))
+    return 0
   fi
 
   kill_applications "$app_config"
 
   if install_application "$app_config"; then
-    local success_msg="Installed"
-    [[ "$app_type" == "config" ]] && success_msg="Configured"
     # No log_status_event ... "Installed" by design - the plist FSEvent drives
     # the green check. See functions/logging-configuration.sh:71-74.
-    ((installed_count++))
+    installed_count=$((installed_count + 1))
   else
     default_retries=$(jq -r '.global_settings.default_retries // 2' "$APPS_JSON")
     local retries=$(echo "$app_config" | jq -r --argjson def "$default_retries" '.retries // $def')
@@ -278,13 +273,13 @@ process_app() {
       # emitting it before a successful retry leaves the row stuck red.
       log_status_event "$item_id" "Installing" "$app_name"
       if retry_application_installation "$app_config" "$retries"; then
-        ((installed_count++))
+        installed_count=$((installed_count + 1))
         return
       fi
     fi
 
     log_status_event "$item_id" "Error" "$app_name"
-    ((failed_count++))
+    failed_count=$((failed_count + 1))
   fi
 }
 
@@ -292,14 +287,9 @@ process_group() {
   local group_config="$1"
   local group_name=$(echo "$group_config" | jq -r '.name')
   local group_id=$(get_item_id "$group_config")
-  local group_subtitle=$(echo "$group_config" | jq -r '.subtitle // "Processing group..."')
   local apps=$(echo "$group_config" | jq -c '.apps[]')
 
   log_info "Processing group: $group_name [ID: $group_id]"
-
-  # Count total apps in group
-  local total_apps=$(echo "$group_config" | jq '.apps | length')
-  local current_app=0
 
   local group_success=0
   local group_failed=0
@@ -308,14 +298,11 @@ process_group() {
     local app_name=$(echo "$app_config" | jq -r '.name')
     local app_id=$(get_item_id "$app_config")
 
-    local app_type=$(echo "$app_config" | jq -r '.type // "installation"')
-
     if is_application_installed "$app_config"; then
       log_info "$app_name (ID: $app_id) already configured/installed"
 
-      ((group_success++))
-      ((skipped_count++))
-      ((current_app++))
+      group_success=$((group_success + 1))
+      skipped_count=$((skipped_count + 1))
 
       continue
     fi
@@ -332,16 +319,14 @@ process_group() {
       # status line on completion would race the FSEvent. See the "Installed"
       # branch in functions/logging-configuration.sh:71-74.
       update_installation_state "$app_id" "installed"
-      ((group_success++))
-      ((installed_count++))
+      group_success=$((group_success + 1))
+      installed_count=$((installed_count + 1))
     else
       log_error "$app_name (ID: $app_id) failed"
       log_status_event "$app_id" "Error" "$group_name: $app_name"
-      ((group_failed++))
-      ((failed_count++))
+      group_failed=$((group_failed + 1))
+      failed_count=$((failed_count + 1))
     fi
-
-    ((current_app++))
 
   done <<<"$apps"
 
@@ -441,10 +426,17 @@ install_application() {
     log_status_event "$item_id" "Installing" "$app_name"
 
     if [[ -n "$package_file" ]]; then
-      if ! install_package_file "$app_config" "$package_file"; then
+      # rc=2 is install_package_file's "non-installable asset" signal (e.g. a
+      # downloaded font or image on an installation-type item) - not a
+      # failure. Only rc=1 (a real install error) fails the item.
+      local install_rc=0
+      install_package_file "$app_config" "$package_file" || install_rc=$?
+      if [[ $install_rc -eq 1 ]]; then
         log_error "Package installation failed for $app_name"
         update_installation_state "$item_id" "not_installed"
         return 1
+      elif [[ $install_rc -eq 2 ]]; then
+        log_info "Non-installable asset for $app_name - continuing with post-install commands"
       fi
     else
       log_warn "Installation type app has no installer package: $app_name"
@@ -527,8 +519,12 @@ download_item() {
 
   log_debug "Final download path: $download_path" >&2
 
-  # Perform download with progress tracking
-  if download_file "$download_url" "$download_path" "" "$item_id" >/dev/null 2>&1; then
+  # Honor the item's download_options (e.g. "use-curl" to bypass aria2c for
+  # hosts that misbehave with segmented downloads).
+  local download_options
+  download_options=$(echo "$app_config" | jq -r '.download_options // empty')
+
+  if download_file "$download_url" "$download_path" "$download_options" "$item_id" >/dev/null 2>&1; then
     log_info "Package downloaded to: $download_path" >&2
     echo "$download_path"
     return 0
@@ -740,16 +736,20 @@ install_dmg_file() {
   # Find installable content
   local success=false
 
-  # First, try to find and install PKG files
-  local pkg_files=($(find "$mount_point" \( -name "*.pkg" -o -name "*.mpkg" \) -type f))
-  if [[ ${#pkg_files[@]} -gt 0 ]]; then
-    log_info "Found PKG files in DMG, installing..."
-    for pkg_file in "${pkg_files[@]}"; do
-      if install_pkg_file "$pkg_file"; then
-        success=true
-      fi
-    done
-  fi
+  # First, try to find and install PKG files. Iterate line-by-line - vendor
+  # packages routinely contain spaces ("Install Foo.pkg") which would
+  # word-split an array=($(find ...)) into broken half-paths.
+  local pkg_found=false
+  while IFS= read -r pkg_file; do
+    [[ -z "$pkg_file" ]] && continue
+    if [[ "$pkg_found" == "false" ]]; then
+      log_info "Found PKG files in DMG, installing..."
+      pkg_found=true
+    fi
+    if install_pkg_file "$pkg_file"; then
+      success=true
+    fi
+  done < <(find "$mount_point" \( -name "*.pkg" -o -name "*.mpkg" \) -type f)
 
   # If no PKG files or PKG installation failed, try to find app bundles
   if [[ "$success" == "false" ]]; then
@@ -1009,34 +1009,39 @@ install_archive_file() {
       log_warn "Specified installer '$installer_name' not found in archive"
       # List what we did find
       log_debug "Available files in archive:"
-      find "$extract_dir" -type f -executable | head -10 | while IFS= read -r file; do
+      # -perm +111: BSD find has no GNU -executable primary
+      find "$extract_dir" -type f -perm +111 | head -10 | while IFS= read -r file; do
         log_debug "  Executable: $(basename "$file")"
       done
     fi
   fi
 
-  # 2. Look for PKG files first (highest priority)
-  local pkg_files=($(find "$extract_dir" \( -name "*.pkg" -o -name "*.mpkg" \) -type f))
-  if [[ ${#pkg_files[@]} -gt 0 ]]; then
-    log_info "Found PKG files in archive, installing..."
-    for pkg_file in "${pkg_files[@]}"; do
-      log_debug "Installing PKG: $pkg_file"
-      if install_pkg_file "$pkg_file"; then
-        success=true
-      fi
-    done
-  fi
+  # 2. Look for PKG files first (highest priority). Line-by-line iteration -
+  # extracted payloads routinely contain spaces in filenames, which would
+  # word-split an array=($(find ...)) into broken half-paths.
+  local pkg_found=false
+  while IFS= read -r pkg_file; do
+    [[ -z "$pkg_file" ]] && continue
+    if [[ "$pkg_found" == "false" ]]; then
+      log_info "Found PKG files in archive, installing..."
+      pkg_found=true
+    fi
+    log_debug "Installing PKG: $pkg_file"
+    if install_pkg_file "$pkg_file"; then
+      success=true
+    fi
+  done < <(find "$extract_dir" \( -name "*.pkg" -o -name "*.mpkg" \) -type f)
 
   # 3. Look for DMG files
   if [[ "$success" == "false" ]]; then
-    local dmg_files=($(find "$extract_dir" -name "*.dmg" -type f))
-    for dmg_file in "${dmg_files[@]}"; do
+    while IFS= read -r dmg_file; do
+      [[ -z "$dmg_file" ]] && continue
       log_debug "Installing DMG: $dmg_file"
       if install_dmg_file "$app_config" "$dmg_file"; then
         success=true
         break
       fi
-    done
+    done < <(find "$extract_dir" -name "*.dmg" -type f)
   fi
 
   # 4. Look for app bundles
@@ -1064,13 +1069,17 @@ install_archive_file() {
 
   # 5. Look for executable scripts/installers (fallback)
   if [[ "$success" == "false" ]]; then
-    local script_files=($(find "$extract_dir" -type f \( -name "*.sh" -o -name "*.zsh" -o -name "install*" -o -name "setup*" \) | head -5))
-    if [[ ${#script_files[@]} -gt 0 ]]; then
-      log_info "Found executable scripts in archive, making them available for commands..."
-      for script_file in "${script_files[@]}"; do
-        chmod +x "$script_file"
-        log_info "Made executable: $script_file"
-      done
+    local script_found=false
+    while IFS= read -r script_file; do
+      [[ -z "$script_file" ]] && continue
+      if [[ "$script_found" == "false" ]]; then
+        log_info "Found executable scripts in archive, making them available for commands..."
+        script_found=true
+      fi
+      chmod +x "$script_file"
+      log_info "Made executable: $script_file"
+    done < <(find "$extract_dir" -type f \( -name "*.sh" -o -name "*.zsh" -o -name "install*" -o -name "setup*" \) | head -5)
+    if [[ "$script_found" == "true" ]]; then
       success=true
     fi
   fi
@@ -1122,9 +1131,11 @@ execute_commands() {
   while IFS= read -r command_line; do
     [[ -z "$command_line" ]] && continue
 
-    # prefix:command   (default root)
+    # prefix:command   (default root). Only a literal root:/user: prefix is
+    # stripped - a bare command containing a colon (e.g. "curl https://x")
+    # must not be mangled into prefix + tail.
     local prefix="root" command="$command_line"
-    if [[ "$command_line" == *":"* ]]; then
+    if [[ "$command_line" == root:* || "$command_line" == user:* ]]; then
       prefix="${command_line%%:*}"
       command="${command_line#*:}"
     fi
@@ -1167,7 +1178,7 @@ execute_commands() {
     # onboarding.log the orchestrator writes - without these, subshell log
     # output goes only to stdout, and a custom command that fails leaves no
     # trace in the log file (see rename_device's silent exit-1 in earlier runs).
-    payload+="export TEMP_DIR=${TEMP_DIR:-/tmp}"$'\n'
+    payload+="export TEMP_DIR=\"${TEMP_DIR:-/tmp}\""$'\n'
     [[ -n "${STATE_DIR:-}" ]] && payload+="export STATE_DIR=\"$STATE_DIR\""$'\n'
     [[ -n "${CONFIG_DIR:-}" ]] && payload+="export CONFIG_DIR=\"$CONFIG_DIR\""$'\n'
     [[ -n "${LOG_DIR:-}" ]] && payload+="export LOG_DIR=\"$LOG_DIR\""$'\n'
@@ -1294,9 +1305,6 @@ process_applications() {
     current_item=$((current_item + 1))
 
     local item_type=$(echo "$item" | jq -r '.type')
-    local item_id=$(echo "$item" | jq -r '.id')
-    local item_name=$(echo "$item" | jq -r '.name')
-
     if [[ "$item_type" == "group" ]]; then
       process_group "$item"
     else
@@ -1317,7 +1325,6 @@ process_prerequisites() {
     return 0
   fi
 
-  local PRE_REQ_MODE=true
   local failures=0
 
   while IFS= read -r app_config; do

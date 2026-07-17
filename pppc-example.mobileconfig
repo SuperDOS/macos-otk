@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  PPPC profile for the macOS Onboarding Toolkit (OTK).
+
+  Pre-approves the TCC permissions OTK's AppleScript-driven steps need
+  (wallpaper, default-browser auto-click, notification clearing) so they run
+  headless without invisible consent prompts. Grants cover the whole
+  execution chain (Intune MDM agent, /bin/bash, osascript, System Events,
+  Terminal for manual/debug runs) because macOS attributes TCC
+  responsibility inconsistently between them.
+
+  BEFORE UPLOADING TO INTUNE:
+    1. Generate two fresh UUIDs (`uuidgen` on macOS, twice) and replace both
+       occurrences of 00000000-0000-4000-8000-000000000001 (payload) and
+       00000000-0000-4000-8000-000000000002 (profile).
+    2. Replace "Example Org" / com.example.* with your organization.
+    3. Upload: Intune admin center - Devices - macOS - Configuration
+       profiles - Create - Templates - Custom - attach this file. Assign to
+       the SAME device group as the onboarding script.
+    4. Point the installer's gate at this profile: set
+       PPPC_PROFILE_NAME_MATCH to a substring of the display name below,
+       and/or add the payload identifier
+       (com.apple.TCC.configuration-profile-policy.<your-payload-UUID>)
+       to PPPC_PROFILE_IDENTIFIERS.
+-->
+<plist version="1.0">
+<dict>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>PayloadDescription</key>
+			<string>OTK PPPC Onboarding</string>
+			<key>PayloadDisplayName</key>
+			<string>OTK PPPC Onboarding</string>
+			<key>PayloadIdentifier</key>
+			<string>com.apple.TCC.configuration-profile-policy.00000000-0000-4000-8000-000000000001</string>
+			<key>PayloadOrganization</key>
+			<string>Example Org</string>
+			<key>PayloadType</key>
+			<string>com.apple.TCC.configuration-profile-policy</string>
+			<key>PayloadUUID</key>
+			<string>00000000-0000-4000-8000-000000000001</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>Services</key>
+			<dict>
+				<key>Accessibility</key>
+				<array>
+					<dict>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.Terminal" and anchor apple</string>
+						<key>Comment</key>
+						<string>Terminal - used during manual / debug runs.</string>
+						<key>Identifier</key>
+						<string>com.apple.Terminal</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.microsoft.intuneMDMAgent" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = UBF8T346G9</string>
+						<key>Comment</key>
+						<string>Intune MDM agent - runs the onboarding script.</string>
+						<key>Identifier</key>
+						<string>com.microsoft.intuneMDMAgent</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.bash" and anchor apple</string>
+						<key>Comment</key>
+						<string>Parent shell of the orchestrator - TCC sometimes attributes responsibility here.</string>
+						<key>Identifier</key>
+						<string>/bin/bash</string>
+						<key>IdentifierType</key>
+						<string>path</string>
+					</dict>
+					<dict>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.systemevents" and anchor apple</string>
+						<key>Comment</key>
+						<string>System Events - needed to drive UI clicks (e.g. CoreServicesUIAgent default-browser button).</string>
+						<key>Identifier</key>
+						<string>com.apple.systemevents</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.osascript" and anchor apple</string>
+						<key>Comment</key>
+						<string>osascript - defence-in-depth when TCC attributes the responsible process to the script binary.</string>
+						<key>Identifier</key>
+						<string>com.apple.osascript</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+				</array>
+				<key>AppleEvents</key>
+				<array>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.finder" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.finder</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.microsoft.intuneMDMAgent" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = UBF8T346G9</string>
+						<key>Comment</key>
+						<string>IntuneMDMAgent to Finder.</string>
+						<key>Identifier</key>
+						<string>com.microsoft.intuneMDMAgent</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.finder" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.finder</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.Terminal" and anchor apple</string>
+						<key>Comment</key>
+						<string>Terminal to Finder.</string>
+						<key>Identifier</key>
+						<string>com.apple.Terminal</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.systemuiserver" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.systemuiserver</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.Terminal" and anchor apple</string>
+						<key>Comment</key>
+						<string>Terminal to SystemUIServer.</string>
+						<key>Identifier</key>
+						<string>com.apple.Terminal</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.systemevents" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.systemevents</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.Terminal" and anchor apple</string>
+						<key>Comment</key>
+						<string>Terminal to System Events.</string>
+						<key>Identifier</key>
+						<string>com.apple.Terminal</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.finder" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.finder</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.bash" and anchor apple</string>
+						<key>Comment</key>
+						<string>/bin/bash to Finder.</string>
+						<key>Identifier</key>
+						<string>/bin/bash</string>
+						<key>IdentifierType</key>
+						<string>path</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.systemevents" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.systemevents</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.bash" and anchor apple</string>
+						<key>Comment</key>
+						<string>/bin/bash to System Events - defence-in-depth when TCC traces back to the parent shell.</string>
+						<key>Identifier</key>
+						<string>/bin/bash</string>
+						<key>IdentifierType</key>
+						<string>path</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.finder" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.finder</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.osascript" and anchor apple</string>
+						<key>Comment</key>
+						<string>osascript to Finder (wallpaper set via `tell Finder to set desktop picture`).</string>
+						<key>Identifier</key>
+						<string>com.apple.osascript</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.systemevents" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.systemevents</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.osascript" and anchor apple</string>
+						<key>Comment</key>
+						<string>osascript to System Events (hide-all-apps trick + CoreServicesUIAgent click loop).</string>
+						<key>Identifier</key>
+						<string>com.apple.osascript</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.systempreferences" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.systempreferences</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.osascript" and anchor apple</string>
+						<key>Comment</key>
+						<string>osascript to System Settings (`tell System Settings to activate / quit` in screen-recording consent flow).</string>
+						<key>Identifier</key>
+						<string>com.apple.osascript</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+				</array>
+			</dict>
+		</dict>
+	</array>
+	<key>PayloadDescription</key>
+	<string>Pre-approves the TCC permissions required by the macOS Onboarding Toolkit so AppleScript-driven steps (wallpaper, default-browser auto-click, notification clearing) run without invisible consent prompts.</string>
+	<key>PayloadDisplayName</key>
+	<string>OTK PPPC Onboarding</string>
+	<key>PayloadIdentifier</key>
+	<string>com.example.otk.pppc.onboarding</string>
+	<key>PayloadOrganization</key>
+	<string>Example Org</string>
+	<key>PayloadScope</key>
+	<string>System</string>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadUUID</key>
+	<string>00000000-0000-4000-8000-000000000002</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+	<key>TargetDeviceType</key>
+	<integer>5</integer>
+</dict>
+</plist>

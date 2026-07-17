@@ -78,10 +78,7 @@ export CHECK_ENROLLMENT_TIME=false
 # Exit codes
 readonly EXIT_SUCCESS=0
 readonly EXIT_GENERAL_ERROR=1
-readonly EXIT_MISSING_DEPS=2
 readonly EXIT_CONFIG_ERROR=3
-readonly EXIT_NETWORK_ERROR=4
-readonly EXIT_INSTALL_ERROR=5
 
 # Source all function files
 source_functions() {
@@ -103,7 +100,7 @@ source_functions() {
     [[ -f "$file" ]] || continue
 
     if source "$file"; then
-      ((file_count++))
+      file_count=$((file_count + 1))
       [[ -n "${DEBUG:-}" ]] && echo "Sourced: $(basename "$file")"
     else
       echo "Failed to source: $(basename "$file")" >&2
@@ -359,7 +356,6 @@ while [[ $# -gt 0 ]]; do
     ;;
   --debug)
     export DEBUG=true
-    # This log_info CALL is what was failing before!
     log_info "Debug mode enabled"
     shift
     ;;
@@ -381,16 +377,18 @@ while [[ $# -gt 0 ]]; do
     ;;
   --help | -h)
     cat <<EOF
-macOS Onboarding System v0.1
+macOS Onboarding System
 
 USAGE:
     $0 [OPTIONS]
 
 OPTIONS:
     --debug                 Enable debug logging
-    --force                 Force run even if already completed
+    --force                 Force run even if already completed (clears completion flags)
+    --silent, -s            Headless run: no SwiftDialog UI, no reboot prompt
     --dry-run, -n           Simulate run: probe URLs, execute detection, print commands only
-                            No downloads, mounting, package installs, file writes, or system changes   
+                            No downloads, mounting, package installs, file writes, or system changes
+    --root <path>           Override the onboarding root directory (default: /Library/Application Support/Microsoft/IntuneScripts)
     --help                  Show this help message
 
 DESCRIPTION:
@@ -415,4 +413,5 @@ EOF
 done
 
 # Start main function
-main "$@"
+# All arguments were consumed by the parse loop above; main takes none.
+main

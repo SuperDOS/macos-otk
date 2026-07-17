@@ -2,7 +2,7 @@
 
 > A config-driven toolkit for **automating macOS onboarding** - rich progress UI via Swiftdialog's inspect mode and designed to deploy via **Microsoft Intune**.
 
-![Onboarding flow demo](docs/images/otk-installed.png)
+![Finished onboarding](docs/images/otk-installed.png)
 
 ---
 
@@ -11,7 +11,7 @@
 **One JSON file describes your entire Mac onboarding - apps, system config, and the progress UI the user watches. Two shell scripts do the rest. No MDM policies to sequence, no per-app installer scripts to write.**
 
 - **Declarative:** everything lives in `apps.json` - prerequisites, apps, groups, detection rules, pre/post commands. Edit it with the bundled [visual builder](#the-json-builder) (a single HTML file, no install).
-- **Self-contained engine:** downloads and installs PKG/DMG/ZIP/TAR/7z itself - including awkward payloads like installers nested inside archives - with multi-URL fallback, retries, and [aria2c acceleration](#bundled-aria2c-build-for-apple-silicon).
+- **Self-contained engine:** downloads and installs PKG/DMG/ZIP/TAR/7z/RAR itself - including awkward payloads like installers nested inside archives - with multi-URL fallback, retries, and [aria2c acceleration](#bundled-aria2c-build-for-apple-silicon).
 - **Idempotent:** layered per-item [detection](#detection-logic--defaults) means re-runs only install what's missing or new - which is also how config updates roll out to an existing fleet, silently.
 - **Live progress UI** via [SwiftDialog](https://github.com/swiftDialog/swiftDialog) inspect mode, driven by real verified state.
 - **Secure by option:** [sign your config](#config-signing) and devices refuse to execute anything you didn't sign.
@@ -48,6 +48,7 @@
     - [Multi-URL downloads \& retries](#multi-url-downloads--retries)
     - [Bundled aria2c build for Apple Silicon](#bundled-aria2c-build-for-apple-silicon)
     - [Built-in custom commands](#built-in-custom-commands)
+    - [`test_app_commands.sh` - config test harness](#test_app_commandssh---config-test-harness)
     - [Versioning \& auto-updates](#versioning--auto-updates)
   - [The JSON Builder](#the-json-builder)
     - [Tour of the canvas](#tour-of-the-canvas)
@@ -94,7 +95,7 @@ The Mac admin community has several excellent SwiftDialog-based onboarding tools
 
 ### A self-contained install engine
 
-OTK doesn't delegate installs - it downloads and installs everything itself. Each item gets multi-URL fallback (`;`-separated, vendor link first, internal mirror second), retry with backoff, accelerated downloads via aria2c, and handlers for PKG, DMG, ZIP, TAR, and 7z - including nested payloads (a pkg inside a dmg inside a zip) and files served with misleading extensions (`detect_package_type` sniffs the real format).
+OTK doesn't delegate installs - it downloads and installs everything itself. Each item gets multi-URL fallback (`;`-separated, vendor link first, internal mirror second), retry with backoff, accelerated downloads via aria2c, and handlers for PKG, DMG, ZIP, TAR, 7z, and RAR - including nested payloads (a pkg inside a dmg inside a zip) and files served with misleading extensions (`detect_package_type` sniffs the real format).
 
 The case that forced this: **Logi Options+**. Logitech ships a zip containing neither an app nor a pkg but a *raw installer executable* that must be run with vendor-specific silent flags. OTK extracts the archive, hunts for a payload in priority order (PKG → DMG → `.app` → executable), pinpoints the right file via `installer_name`, and exports it as `$INSTALLER_PATH` for your post-install commands:
 
@@ -169,7 +170,7 @@ At install time the contents land in `Swift Dialog/icons/` and SwiftDialog refer
 
 **4. Upload all three to the same host.** They don't have to share a folder, but the URLs need to be reachable over HTTPS from the Mac during onboarding.
 
-**5. Point the installer at your URLs.** Edit the `DEPLOYMENT CONFIG - REPLACE BEFORE FORKING` banner near the top of `otk-install.sh` **and** `otk-intune-onboarding.sh`:
+**5. Point the installer at your URLs.** Edit the `DEPLOYMENT CONFIG - REPLACE BEFORE DEPLOYING` banner near the top of `otk-install.sh` **and** `otk-intune-onboarding.sh`:
 
 ```bash
 readonly ONBOARDING_SCRIPTS_URL="https://<YOUR_HOST>/onboardingtoolkit.zip"
@@ -204,7 +205,7 @@ sudo ./otk-install.sh
 # 2) Or be explicit
 sudo ./otk-install.sh --install
 
-# 3) Re-run onboarding later (also clears the completion flag)
+# 3) Re-run onboarding later (--force clears the completion flag)
 sudo ./otk-install.sh --run
 
 # 4) Show current status
@@ -292,7 +293,7 @@ Prefer the classic **run-once-and-never-again** behavior? Set `ENABLE_FLEET_UPDA
 
 Intune sometimes runs shell scripts *before* all device-targeted configuration profiles have landed. If onboarding starts in that window, AppleScript-driven steps (setting the wallpaper, auto-clicking the default-browser confirmation) hit unprovisioned TCC and hang on invisible consent dialogs or silently fail. To avoid this, `otk-intune-onboarding.sh` waits (default 10 minutes, override with the `PPPC_WAIT_TIMEOUT` env var) for your org's **PPPC (Privacy Preferences Policy Control) profile** to be present before doing anything, and exits non-zero on timeout so Intune retries later.
 
-Two constants near the top of the script control the match - **both ship with placeholder values you must replace**:
+Two constants near the top of the script control the match - **replace both with your own profile's values before deploying**:
 
 ```bash
 readonly PPPC_PROFILE_NAME_MATCH="PPPC Deploy"     # substring of your profile's display name
@@ -336,7 +337,7 @@ Top-level sections:
 - **`metadata`** - descriptive fields (`version`, `created`, `organization`, `contact`).
 - **`global_settings`** - toolkit defaults: `version`, `default_retries`, `default_dl_timeout`, `kill_apps_pre`, `kill_apps_post`.
 - **`swift_dialog_settings`** - dialog look & feel: `title`, `message`, `iconsize`, `bannerimage`, etc.
-- **`prerequisites`** - items installed first, with no UI/state tracking (jq, aria2c, SwiftDialog, utiluti, Rosetta…).
+- **`prerequisites`** - items installed first, with no UI/state tracking (aria2c, SwiftDialog, utiluti, Rosetta… - jq itself is bootstrapped by the installer before apps.json can be parsed).
 - **`items`** - array of items with `type: installation | config | group`. Groups can nest `apps`.
 
 Each item commonly supports:
@@ -494,6 +495,22 @@ These helpers can be used in `pre_install_commands` / `post_install_commands` (p
 
 You can pass arbitrary values via `custom_variables` and reference them as `$NAME` in commands.
 
+### `test_app_commands.sh` - config test harness
+
+Validate a config's commands before signing and shipping it - from any machine for a readable dry-run, or on a Mac to actually execute them:
+
+```bash
+./test_app_commands.sh [JSON_FILE] [MODE] [DRY_RUN]
+
+./test_app_commands.sh                                  # dry-run apps.example.json, all commands
+./test_app_commands.sh apps.json all true               # print every command your config would run
+./test_app_commands.sh apps.json detection false        # execute detection commands (on a Mac)
+```
+
+- **MODE**: `all` | `detection` | `pre` | `post` - which command lists to walk.
+- Covers `prerequisites[]` and `items[]` (groups nested), accepts string and array command forms, substitutes each item's `custom_variables`, and honors `root:`/`user:` context. Runtime-only variables like `$INSTALLER_PATH` are shown verbatim.
+- With `DRY_RUN=false`, `functions/` is sourced when present, so built-in custom commands (`rename_device --testonly ...`, `configure_dock --dry-run ...`) are callable.
+
 ### Versioning & auto-updates
 
 - Set your config version at `global_settings.version` in `apps.json`.
@@ -504,6 +521,9 @@ You can pass arbitrary values via `custom_variables` and reference them as `$NAM
 - The `--force` is essential in both - without it the completion flag would short-circuit the re-run and version bumps would silently fail to apply on already-onboarded machines.
 - Per-item detection still runs on every forced pass, so apps that are already installed are skipped - `--force` only forces the orchestrator to evaluate items again, not to reinstall everything.
 - The comparison is **strictly newer**, major.minor only (`1.2 → 1.3` triggers, `1.2 → 1.2` doesn't) - a content edit without a version bump will never roll out. Removing an item also doesn't uninstall it from machines that already have it; config is additive.
+- **What a version bump updates:** `apps.json`, `onboardingtoolkit.zip` (orchestrator + all `functions/` logic), and `icons.zip` - so script fixes and new-item icons roll out with the config. **What it doesn't:** the installer script itself - the daemon runs a copy of `otk-install.sh` installed at setup time. How that copy gets updated depends on your deployment:
+  - **Deployed via Intune:** nothing extra needed. Update the script in Intune; when Intune re-runs it, `--install` re-copies the fresh script over the daemon copy and rewrites the LaunchDaemon plist (so interval changes propagate too).
+  - **No MDM (manual installs):** either re-run `--install` by hand, or include your configured `otk-install.sh` (your URLs + public key) inside `onboardingtoolkit.zip` - the daemon's update pass then refreshes its own code on every version bump, effective the next tick. Plist changes (e.g. `VERSION_CHECK_INTERVAL_MINUTES`) still need a manual `--create-launchd`.
 - **Update-day checklist:** edit `apps.json` → bump `global_settings.version` → `jq empty apps.json` + `./test_app_commands.sh apps.json all true` → re-zip `onboardingtoolkit.zip` if scripts changed → add any new item icons to `icons.zip` → `./otk-sign.sh` → upload each file with its `.sig` (icons.zip needs no signature).
 - Mind `kill_apps` on items you expect to update after onboarding - silent update runs will kill those processes even if the user is mid-task.
 
@@ -541,7 +561,7 @@ Click an item to open the editor. It's organized into five tabs.
 
 *Commands, Detection, and Variables tabs: pre/post-install command builders, kill apps, detection rules with AND/OR logic, custom variables.*
 
-- **Commands** - Pre-Install, Post-Install, and Kill Apps lists. Each list has a **helper-template dropdown** that injects ready-made calls to the built-in custom commands (`install_rosetta2`, `configure_dock`, `rename_device`, `set_browser_default`, `set_outlook_default`, `set_default_locale`, `set_login_item`, `show_action_dialog`, …) so you don't have to remember names or syntax. Detection/pre-install/post-install entries are validated to require a `root:` or `user:` prefix - adding a bare command surfaces an error snackbar instead of silently exporting it.
+- **Commands** - Pre-Install, Post-Install, and Kill Apps lists. Each list has a **helper-template dropdown** that injects ready-made calls to the built-in custom commands (`install_rosetta2`, `configure_dock`, `rename_device`, `set_browser_default`, `set_default_mail_client`, `set_default_locale`, `set_login_item`, `show_action_dialog`, …) so you don't have to remember names or syntax. Detection/pre-install/post-install entries are validated to require a `root:` or `user:` prefix - adding a bare command surfaces an error snackbar instead of silently exporting it.
 - **Detection** - list of detection commands plus a logic toggle (**OR** / **AND**) that maps to `detect_all`. Helper templates for common patterns are also provided. The toggle defaults to **OR**, matching the runtime's behavior when `detect_all` is missing.
 - **Variables** - key/value pairs added to `custom_variables`. Each row has a **string / array** type toggle. In array mode the value renders as a vertical list of inputs with `+ Add item` and per-row remove buttons - no raw JSON to type. Switching `string ↔ array` converts the value (newline-separated string becomes array entries and vice versa).
 
@@ -746,4 +766,4 @@ Signing protects the *config* channel. The `download_url`s inside `apps.json` st
 
 ## License
 
-License MIT - see `LICENSE`
+License MIT - see `LICENSE.md`

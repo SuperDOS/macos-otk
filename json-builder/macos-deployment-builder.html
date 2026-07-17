@@ -1,0 +1,3106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>macOS Deployment Configuration Builder</title>
+
+  <!-- BeerCSS (MD3) -->
+  <link href="https://cdn.jsdelivr.net/npm/beercss@4.0.21/dist/cdn/beer.min.css" rel="stylesheet">
+  <script type="module" src="https://cdn.jsdelivr.net/npm/beercss@4.0.21/dist/cdn/beer.min.js"></script>
+
+  <!-- Material Symbols (v4 sets --font-icon: "Material Symbols Outlined") -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&display=swap" rel="stylesheet">
+
+  <!-- SortableJS -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+
+  <style>
+    /* Item cards with modern design */
+    .otk-item {
+      border-radius: 20px;
+      margin-bottom: 1.5rem;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--outline-variant);
+    }
+
+    .otk-item:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
+      border-color: var(--primary);
+    }
+
+    .item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .item-title {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      font-size: 1.25rem;
+      font-weight: 500;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .item-title i {
+      font-size: 1.5rem;
+      opacity: 0.8;
+    }
+
+    .item-title span {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .item-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .drag-handle {
+      cursor: grab;
+      padding: 0.75rem;
+      border-radius: 50%;
+      transition: all 0.2s;
+      opacity: 0.6;
+    }
+
+    .drag-handle:hover {
+      background: var(--surface-variant);
+      opacity: 1;
+      transform: scale(1.1);
+    }
+
+    .drag-handle:active {
+      cursor: grabbing;
+      transform: scale(0.95);
+    }
+
+    /* Nested items with better hierarchy */
+    .nested-items {
+      min-height: 64px;
+      padding: 4px;
+      border: 2px dashed transparent;
+      border-radius: 8px;
+      background: transparent;
+    }
+
+    .nested-items:empty {
+      border-color: #c5c5c5;
+      background: #fafafa;
+    }
+
+    .nested-items:empty::before {
+      content: 'Drop items here';
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      font-size: 12px;
+      height: 56px;
+    }
+
+    .field {
+      margin-block-end: 3rem;
+    }
+
+    /* Command sections with improved spacing */
+    .command-section {
+      margin-bottom: 2.5rem;
+    }
+
+    .command-section h6 {
+      margin: 0 0 1.5rem 0;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--on-surface-variant);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      padding-bottom: 0.5rem;
+    }
+
+    .command-section h6 i {
+      color: var(--primary);
+      font-size: 1.2rem;
+    }
+
+    .command-section h6 .chip {
+      margin-left: auto;
+    }
+
+    /* Enhanced command lists */
+    .command-list {
+      margin-bottom: 1.5rem;
+      margin-top: 1.5rem;
+      min-height: 60px;
+    }
+
+    .command-list:empty::after {
+      content: 'No items added yet. Use the form below to add items.';
+      display: block;
+      text-align: center;
+      padding: 3rem 2rem;
+      color: var(--on-surface-variant);
+      font-style: italic;
+      opacity: 0.7;
+      background: var(--surface-container-low);
+      border-radius: 12px;
+      border: 2px dashed var(--outline-variant);
+    }
+
+    /* Modern command items */
+    .command-item {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding: 1.25rem;
+      background: var(--surface-container-low);
+      border-radius: 16px;
+      border: 1px solid var(--outline-variant);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .command-item::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--primary);
+      transform: scaleY(0);
+      transition: transform 0.2s ease;
+    }
+
+    .command-item:hover {
+      border-color: var(--primary);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .command-item:hover::before {
+      transform: scaleY(1);
+    }
+
+    .command-item input {
+      flex: 1;
+      margin: 0;
+      /* Visible affordance so users know they can click to edit existing values
+         instead of having to delete and re-add. Subtle by default, prominent on
+         hover/focus. */
+      border: 1px solid var(--outline-variant);
+      background: var(--surface);
+      font-size: 0.95rem;
+      border-radius: 8px;
+      padding: 0.5rem 0.75rem;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .command-item input:hover {
+      border-color: var(--primary);
+    }
+
+    .command-item input:focus {
+      outline: 2px solid var(--primary);
+      outline-offset: -2px;
+      border-color: var(--primary);
+    }
+
+    .command-item textarea {
+      flex: 1;
+      margin: 0;
+      border: 1px solid var(--outline-variant);
+      background: var(--surface);
+      font-size: 0.85rem;
+      border-radius: 8px;
+      padding: 0.5rem;
+      resize: vertical;
+      min-height: 60px;
+      transition: border-color 0.15s ease;
+    }
+
+    .command-item textarea:hover {
+      border-color: var(--primary);
+    }
+
+    .command-item textarea:focus {
+      outline: 2px solid var(--primary);
+      outline-offset: -2px;
+    }
+
+
+    /* SwiftDialog settings modal — section grouping. */
+    .sd-section-heading {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1.5rem;
+      margin-bottom: 0.25rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--outline-variant);
+      font-weight: 600;
+    }
+
+    .sd-section-heading:first-child {
+      margin-top: 0;
+    }
+
+    .sd-section-help {
+      margin: 0 0 1rem;
+      color: var(--on-surface-variant);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .sd-section-help code {
+      font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+      font-size: 0.85em;
+      padding: 0 0.25rem;
+      background: var(--surface-container-low);
+      border-radius: 4px;
+    }
+
+    .sd-toggle-field {
+      display: flex !important;
+      align-items: center;
+      gap: 1rem;
+      padding: 0 1rem !important;
+      min-inline-size: 0;
+      cursor: pointer;
+    }
+
+    .sd-toggle-label {
+      flex: 1;
+      font-size: 0.95rem;
+    }
+
+    /* Sticky footer needs scroll-clearance below the last content row. */
+    #dialog-settings-modal {
+      padding-block-end: 5.5rem;
+    }
+
+    /* Enhanced command add section */
+    .command-add {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-end;
+      margin-top: 1.5rem;
+      padding: 1.5rem;
+      background: var(--surface-container-highest);
+      border-radius: 16px;
+      border: 2px dashed var(--outline-variant);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .command-add:focus-within {
+      border-color: var(--primary);
+      background: var(--primary-container);
+      box-shadow: 0 0 0 4px rgba(var(--primary-rgb), 0.1);
+    }
+
+    .command-add input {
+      flex: 1;
+    }
+
+    .command-add button {
+      flex-shrink: 0;
+    }
+
+    /* Key-value editor specific styling */
+    .command-add .field:first-child {
+      max-width: 220px;
+      min-width: 180px;
+    }
+
+    /* JSON output with syntax highlighting feel */
+    .json-output {
+      font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      padding: 2rem;
+      border-radius: 16px;
+      background: var(--surface-container);
+      border: 1px solid var(--outline-variant);
+      max-height: 600px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      position: relative;
+    }
+
+    .json-output::before {
+      content: 'JSON Configuration';
+      position: absolute;
+      top: 0.75rem;
+      right: 1rem;
+      font-size: 0.75rem;
+      color: var(--on-surface-variant);
+      opacity: 0.6;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    @media (max-width: 768px) {
+      .app-header h1 {
+        font-size: 2rem;
+      }
+
+      .item-header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .item-actions {
+        justify-content: center;
+      }
+    }
+
+    /* Enhanced tabs */
+    .tabs {
+      margin-bottom: 2rem;
+      border-bottom: 1px solid var(--outline-variant);
+      display: flex;
+      overflow-x: auto;
+    }
+
+    .tabs a {
+      padding: 1rem 1.5rem;
+      transition: all 0.3s ease;
+      border-radius: 12px 12px 0 0;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-width: max-content;
+    }
+
+    fieldset h6 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    /* Fix for input rows */
+    .flexrow {
+      display: flex;
+      flex: 1 0 auto !important;
+    }
+
+    div.available-width {
+      width: -webkit-fill-available;
+    }
+
+    div.available-width-input {
+      width: -webkit-fill-available;
+      margin-left: 10px;
+    }
+  </style>
+</head>
+
+<body class="dark">
+
+  <!-- Main Content -->
+  <main class="max">
+    <!-- Header -->
+    <header class="surface primary center padding-xl round-b elevate-3">
+      <h2 class="headline large">macOS Deployment Builder</h2>
+      <p class="subtitle">Create deployment flows to be used with macOS onboarding Toolkit</p>
+      <div class="row center gap">
+        <button id="btn-load-example" class="button fill round"><i>library_books</i><span>Load Example
+            Data</span></button>
+        <button id="btn-clear-all" class="button transparent round"><i>delete_sweep</i><span>Clear</span></button>
+      </div>
+    </header>
+
+    <!-- Main Navigation -->
+    <nav class="surface sticky row padding-s">
+      <button id="btn-add-item" class="button">
+        <i>add_circle</i>
+        <span>Add Item</span>
+      </button>
+      <button id="btn-add-group" class="button">
+        <i>create_new_folder</i>
+        <span>Add Group</span>
+      </button>
+      <div class="max"></div>
+      <button id="btn-global-settings" class="button transparent">
+        <i>settings</i>
+        <span>Global Settings</span>
+      </button>
+      <button id="btn-dialog-settings" class="button transparent">
+        <i>chat_bubble</i>
+        <span>Swift Dialog</span>
+      </button>
+    </nav>
+
+    <!-- Applications & Configurations -->
+    <article class="no-elevate round">
+      <header class="padding">
+        <h2>🔧 Prerequisites</h2>
+        <p class="small-text">Items that must be installed before the main deployment begins. SwiftDialog is always
+          included.</p>
+      </header>
+      <div id="prereq-list" class="padding"></div>
+    </article>
+
+    <article class="no-elevate round">
+      <header class="padding">
+        <h2>📦 Applications & Configurations</h2>
+        <p class="small-text">Drag items to reorder. Groups can contain multiple items.</p>
+      </header>
+      <div id="top-list" class="padding"></div>
+    </article>
+
+    <!-- Generated JSON -->
+    <article class="no-elevate round">
+      <header class="padding">
+        <nav class="no-space">
+          <h2>📄 Generated Configuration</h2>
+          <div class="max"></div>
+          <nav class="wrap">
+            <button id="btn-copy-json" class="button small">
+              <i>content_copy</i>
+              <span>Copy</span>
+            </button>
+            <button id="btn-download" class="button small">
+              <i>download</i>
+              <span>Download</span>
+            </button>
+            <button id="btn-load-json" class="button small transparent"
+              title="Load any apps.json file — tip: open ../apps.json from the file picker to edit the currently deployed config">
+              <i>upload</i>
+              <span>Load JSON</span>
+            </button>
+          </nav>
+        </nav>
+      </header>
+      <pre id="json-output" class="json-output margin">// Live configuration will appear here…</pre>
+      <p class="small-text" style="margin:6px 12px 0; opacity:0.7;">Tip: use <strong>Load JSON</strong> and pick
+        <code>../apps.json</code> to edit the currently deployed config.
+      </p>
+      <input id="file-load" type="file" accept="application/json" style="display:none" />
+    </article>
+  </main>
+
+  <!-- Group Editor Modal -->
+  <dialog id="group-modal">
+    <h6>📁 Edit Group</h6>
+    <input type="hidden" id="group-id" />
+    <div class="medium-space l m"></div>
+    <div class="max">
+      <div class="field label border">
+        <input id="group-name" type="text" required>
+        <label>Group Name *</label>
+        <span class="helper">Group title for organization</span>
+      </div>
+
+      <div class="field label border">
+        <input id="group-icon" type="text">
+        <label>Icon Path</label>
+        <span class="helper">Icon file path or name</span>
+      </div>
+
+      <div class="field label border">
+        <input id="group-subtitle" type="text">
+        <label>Subtitle</label>
+        <span class="helper">Shown in the dialog while this group is being processed</span>
+      </div>
+    </div>
+    <nav class="right-align">
+      <button id="group-save" class="button fill">
+        <i>save</i>
+        <span>Save Group</span>
+      </button>
+      <button class="button" onclick="ui('#group-modal')">Cancel</button>
+    </nav>
+  </dialog>
+
+  <!-- Item Editor Modal -->
+  <dialog id="item-modal">
+    <h5 id="item-modal-title">Add Item</h5>
+    <div class="max">
+      <input type="hidden" id="item-id" />
+      <input type="hidden" id="parent-group-id" />
+
+      <!-- Tabs -->
+      <nav class="tabs left-align">
+        <a data-ui="#item-basic" tabindex="0" class="active"> <i>info</i>
+          <span>Basic</span></a>
+        <a data-ui="#item-advanced" tabindex="0" class=""> <i>tune</i>
+          <span>Advanced</span></a>
+        <a data-ui="#item-commands" tabindex="0"> <i>terminal</i>
+          <span>Commands</span></a>
+        <a data-ui="#item-detection" tabindex="0"> <i>search</i>
+          <span>Detection</span></a>
+        <a data-ui="#item-variables" tabindex="0"> <i>code</i>
+          <span>Variables</span></a>
+      </nav>
+      <div class="medium-space"></div>
+
+      <!-- Basic Info Tab -->
+      <div id="item-basic" class="page padding active">
+        <div class="field middle-align">
+          <nav>
+            <div class="max">
+              <h6>Prerequisite Item</h6>
+              <div>This item must be installed before main deployment</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="item-is-prereq">
+              <span></span>
+            </label>
+          </nav>
+        </div>
+
+        <div class="field label border">
+          <select id="item-type">
+            <option value="installation">Installation</option>
+            <option value="config">Configuration</option>
+          </select>
+          <label>Type</label>
+          <span class="helper">Installation for apps, config for settings</span>
+        </div>
+
+        <div class="field label border">
+          <input id="item-name" type="text" required>
+          <label>Name *</label>
+          <span class="helper">Display name for this item</span>
+        </div>
+
+        <div class="field label border non-prereq-only">
+          <input id="item-icon" type="text">
+          <label>Icon</label>
+          <span class="helper">Icon path for UI display (not used for prerequisites)</span>
+        </div>
+
+        <div class="field label border">
+          <input id="item-download_url" type="text">
+          <label>Download URL</label>
+          <span class="helper">Single URL, or <code>;</code>-separated list of fallback URLs tried in order. SharePoint
+            share links are auto-handled.</span>
+        </div>
+
+        <div class="field label border">
+          <input id="item-download_options" type="text">
+          <label>Download Options</label>
+          <span class="helper">Optional flags, e.g. <code>use-curl</code> to force curl over aria2c. Leave blank for
+            default.</span>
+        </div>
+
+        <div class="field label border installation-only">
+          <input id="item-alt_app_name" type="text">
+          <label>Alternative App Name</label>
+          <span class="helper">Alternate app name for detection</span>
+        </div>
+      </div>
+
+      <!-- Advanced Tab -->
+      <div id="item-advanced" class="page padding">
+        <div class="field label border">
+          <input id="item-retries" type="number" min="0" value="3">
+          <label>Retries</label>
+          <span class="helper">Number of retry attempts</span>
+        </div>
+
+        <div class="field label border">
+          <input id="item-timeout" type="number" min="0" value="600">
+          <label>Timeout (seconds)</label>
+          <span class="helper">Operation timeout in seconds</span>
+        </div>
+
+        <div class="field label border">
+          <input id="item-download_path" type="text">
+          <label>Download Path</label>
+          <span class="helper">Custom download location</span>
+        </div>
+
+        <div class="field label border installation-only">
+          <input id="item-install_path" type="text">
+          <label>Install Path</label>
+          <span class="helper">Installation destination</span>
+        </div>
+
+        <div class="field label border installation-only">
+          <input id="item-installer_name" type="text">
+          <label>Installer Name</label>
+          <span class="helper">Specific installer executable</span>
+        </div>
+
+        <div class="field label border installation-only">
+          <input id="item-app_path" type="text">
+          <label>App Path inside DMG/Archive</label>
+          <span class="helper">Relative path to the .app bundle inside a mounted DMG or extracted archive (e.g.
+            Adobe/Installer.app). Optional.</span>
+        </div>
+
+        <div class="field label border">
+          <input id="item-archive_password" type="text">
+          <label>Archive Password</label>
+          <span class="helper">Password for protected zip/7z/rar payloads. Ignored for PKG/DMG. Stored in plain
+            text in apps.json (world-readable on devices) - fine for AV-evasion wrappers, not real secrets.</span>
+        </div>
+      </div>
+
+      <!-- Commands Tab -->
+      <div id="item-commands" class="page padding">
+        <!-- Built-in custom commands reference (shipped in functions/custom-commands.sh).
+             Surfaced here so the builder isn't only useful for raw shell one-liners. -->
+        <details class="command-section" style="margin-bottom: 12px;">
+          <summary><strong>Available custom commands</strong> <span class="chip small">click to expand</span></summary>
+          <div style="font-family: monospace; font-size: 12px; line-height: 1.6; padding: 8px 12px;">
+            <div><code>install_rosetta2</code> — install Rosetta 2 (Apple Silicon only; no-ops on Intel)</div>
+            <div><code>configure_dock /Applications/A.app /Applications/B.app dir-Downloads:created:stack:fan</code>
+            </div>
+            <div><code>rename_device --nametemplate "mac-{serialnum}"</code> — supports {prefix} {serialnum} {country}
+              {modelcode} {random[N]}</div>
+            <div><code>set_browser_default "Microsoft Edge"</code> — Chromium browsers only (Edge / Chrome / Brave /
+              etc.)</div>
+            <div><code>set_login_item /Applications/OneDrive.app</code> |
+              <code>set_login_item --remove /Applications/Foo.app</code>
+            </div>
+            <div><code>set_default_locale en_GB</code> — locale + 24-hour clock at system + user scope</div>
+            <div><code>show_action_dialog --title 'TITLE' --message 'BODY' --timer 600</code> — user-action prompt with
+              auto-close</div>
+            <div style="margin-top: 6px; opacity: 0.7;">
+              All helpers run in the orchestrator's child shell — prefix with <code>root:</code> or <code>user:</code>
+              as appropriate.
+              Variables: <code>$INSTALLER_PATH</code> (set by archive installers), <code>$TEMP_DIR</code>,
+              <code>$HOME</code>,
+              and any <code>custom_variables</code> declared on the item.
+            </div>
+          </div>
+        </details>
+
+        <!-- Pre-Install Commands (Installation only) -->
+        <div class="installation-only command-section">
+          <h6>
+            <i>play_arrow</i>
+            Pre-Install Commands
+            <span class="chip small">prefix with root: or user:</span>
+          </h6>
+          <div id="le-item-pre" class="command-list"></div>
+          <div class="field label border helper-picker" style="margin-bottom: 8px;">
+            <select id="le-item-pre-helper" data-target="le-item-pre-input"></select>
+            <label>Insert helper template</label>
+          </div>
+          <span class="flexrow">
+            <div class="field available-width">
+              <div class="field label border" style="flex: 1;">
+                <input type="text" id="le-item-pre-input" placeholder=" ">
+                <label>Command</label>
+                <span class="helper">e.g., user:mkdir /tmp/install — or pick a helper above</span>
+              </div>
+            </div>
+            <button class="square large" id="le-item-pre-add">
+              <i>add</i>
+            </button>
+          </span>
+        </div>
+
+        <!-- Post-Install Commands -->
+        <div class="command-section">
+          <h6>
+            <i>check_circle</i>
+            Post-Install Commands
+            <span class="chip small">runs after installation</span>
+          </h6>
+          <div id="le-item-post" class="command-list"></div>
+          <div class="field label border helper-picker" style="margin-bottom: 8px;">
+            <select id="le-item-post-helper" data-target="le-item-post-input"></select>
+            <label>Insert helper template</label>
+          </div>
+          <span class="flexrow">
+            <div class="field available-width">
+              <div class="field label border" style="flex: 1;">
+                <input type="text" id="le-item-post-input" placeholder=" ">
+                <label>Command</label>
+                <span class="helper">e.g., root:defaults write com.app.setting -bool true — or pick a helper
+                  above</span>
+              </div>
+            </div>
+            <button class="square large" id="le-item-post-add">
+              <i>add</i>
+            </button>
+          </span>
+        </div>
+
+        <!-- Kill Apps -->
+        <div class="command-section">
+          <h6>
+            <i>close</i>
+            Kill Apps
+            <span class="chip small">terminate before installation</span>
+          </h6>
+          <div id="le-item-kill" class="command-list"></div>
+          <span class="flexrow">
+            <div class="field available-width">
+              <div class="field label border" style="flex: 1;">
+                <input type="text" id="le-item-kill-input" placeholder=" ">
+                <label>Application Name</label>
+                <span class="helper">e.g., Safari, Microsoft Word</span>
+              </div>
+            </div>
+            <button class="square large" id="le-item-kill-add">
+              <i>add</i>
+            </button>
+          </span>
+        </div>
+      </div>
+
+      <!-- Detection Tab -->
+      <div id="item-detection" class="page padding">
+        <div class="command-section">
+          <h6>
+            <i>search</i>
+            Detection Commands
+            <span class="chip small">check if installed</span>
+          </h6>
+          <div id="le-item-detect" class="command-list"></div>
+          <div class="field label border helper-picker" style="margin-bottom: 8px;">
+            <select id="le-item-detect-helper" data-target="le-item-detect-input"></select>
+            <label>Insert helper template</label>
+          </div>
+          <span class="flexrow">
+            <div class="field available-width">
+              <div class="field label border" style="flex: 1;">
+                <input type="text" id="le-item-detect-input" placeholder=" ">
+                <label>Detection Command</label>
+                <span class="helper">e.g., root:[ -d '/Applications/App.app' ] — or pick a helper above</span>
+              </div>
+            </div>
+            <button class="square large" id="le-item-detect-add">
+              <i>add</i>
+            </button>
+          </span>
+        </div>
+
+        <div>
+          <div class="field label border">
+            <select id="item-detect_all">
+              <option value="false">Any Command Succeeds (OR Logic)</option>
+              <option value="true">All Commands Must Succeed (AND Logic)</option>
+            </select>
+            <label>Detection Logic</label>
+            <span class="helper">Default is OR — any command succeeding marks the item installed. Choose AND when every
+              command must pass (e.g. version floor + path check).</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Variables Tab -->
+      <div id="item-variables" class="page padding">
+        <div class="command-section">
+          <h6>
+            <i>code</i>
+            Custom Variables
+            <span class="chip small">supports strings and JSON arrays</span>
+          </h6>
+          <div id="le-item-kv" class="command-list"></div>
+
+          <div class="input-field s12">
+            <span class="flexrow" style="align-items: flex-start;">
+              <div class="space"></div>
+              <div class="field border label" style="flex: 1;">
+                <input type="text" id="le-item-kv-key" placeholder=" ">
+                <label>Key</label>
+              </div>
+
+              <div class="field border label" style="min-width: 140px;">
+                <select id="le-item-kv-type">
+                  <option value="string">String</option>
+                  <option value="array">Array</option>
+                </select>
+                <label>Type</label>
+              </div>
+
+              <div class="field textarea border label" style="flex: 2;">
+                <textarea id="le-item-kv-val" placeholder=" "></textarea>
+                <label>Value</label>
+                <span class="helper">For arrays: one entry per line. For strings: any text.</span>
+              </div>
+              <div class="field middle-align">
+                <button class="square large" id="le-item-kv-add">
+                  <i>add</i>
+                </button>
+              </div>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <nav class="right-align">
+      <button id="item-save" class="button fill">
+        <i>save</i>
+        <span>Save Item</span>
+      </button>
+      <button class="button" onclick="ui('#item-modal')">Cancel</button>
+    </nav>
+  </dialog>
+
+  <!-- Global Settings Modal -->
+  <dialog id="global-settings-modal">
+    <h6>⚙️ Global Settings</h6>
+    <div class="medium-space l m"></div>
+    <div class="max">
+      <nav class="tabs left-align">
+        <a data-ui="#org-info" tabindex="0" class="active"> <i>business</i>Organization Information</a>
+        <a data-ui="#glob-settings" tabindex="0" class=""><i>settings</i>Deployment Settings</a>
+        <a data-ui="#kill-pre" tabindex="0"><i>close</i> Kill Apps Before Installation</a>
+        <a data-ui="#kill-post" tabindex="0"><i>power_settings_new</i>Kill Apps After Installation</a>
+      </nav>
+      <div class="medium-space"></div>
+      <div class="page padding active" id="org-info">
+        <h6>
+          <i>business</i>
+          Organization Information
+        </h6>
+        <div class="field label border">
+          <input type="text" id="org-organization" value="Company">
+          <label>Organization Name</label>
+        </div>
+
+        <div class="field label border">
+          <input type="email" id="org-contact" value="it@example.com">
+          <label>Contact Email</label>
+        </div>
+
+        <div class="field border label extra textarea">
+          <textarea id="org-description">Enterprise macOS application deployment configuration</textarea>
+          <label>Configuration Description</label>
+        </div>
+      </div>
+      <div class="page padding" id="glob-settings">
+        <h6>
+          <i>settings</i>
+          Deployment Settings
+        </h6>
+
+        <div class="field label border">
+          <input type="text" id="gs-version" value="1.0">
+          <label>Config Version</label>
+        </div>
+
+        <div class="field label border">
+          <input type="number" id="gs-default_retries" value="2">
+          <label>Default Retries</label>
+        </div>
+
+        <div class="field label border">
+          <input type="number" id="gs-default_retry_delay" value="5">
+          <label>Download Retry Delay (seconds)</label>
+        </div>
+
+        <div class="field label border">
+          <input type="number" id="gs-default_dl_timeout" value="300">
+          <label>Download Timeout (seconds)</label>
+        </div>
+      </div>
+      <div class="page padding" id="kill-pre">
+        <h6>
+          <i>close</i>
+          Kill Apps Before Installation
+        </h6>
+        <div id="global-kill-apps-pre-list" class="command-list"></div>
+        <span class="flexrow">
+          <div class="field available-width">
+            <div class="field label border" style="flex: 1;">
+              <input type="text" id="new-global-kill-app-pre" placeholder=" ">
+              <label>Application Name</label>
+              <span class="helper">e.g., Safari, Chrome - terminated before installations</span>
+            </div>
+          </div>
+          <button onclick="addGlobalKillApp('pre')" class="square large">
+            <i>add</i>
+          </button>
+        </span>
+      </div>
+      <div class="page padding" id="kill-post">
+        <h6>
+          <i>power_settings_new</i>
+          Kill Apps After Installation
+        </h6>
+        <div id="global-kill-apps-post-list" class="command-list"></div>
+        <span class="flexrow">
+          <div class="field available-width">
+            <div class="field label border" style="flex: 1;">
+              <input type="text" id="new-global-kill-app-post" placeholder=" ">
+              <label>Application Name</label>
+              <span class="helper">e.g., Safari, Chrome - terminated after all installations</span>
+            </div>
+          </div>
+          <button onclick="addGlobalKillApp('post')" class="square large">
+            <i>add</i>
+          </button>
+        </span>
+      </div>
+    </div>
+    <footer class="fixed">
+      <nav class="right-align"><button onclick="saveGlobalSettings()" class="button fill">
+          <i>save</i>
+          <span>Save Settings</span>
+        </button>
+        <button class="button" onclick="ui('#global-settings-modal')">Cancel</button>
+      </nav>
+    </footer>
+  </dialog>
+
+  <!-- Swift Dialog Settings Modal -->
+  <dialog id="dialog-settings-modal">
+    <h6><i>chat_bubble</i> Swift Dialog Settings</h6>
+    <div class="medium-space l m"></div>
+    <div class="max">
+      <nav class="tabs left-align">
+        <a data-ui="#dialog-content" tabindex="0" class="active"> <i>chat_bubble</i>Dialog Content</a>
+        <a data-ui="#dialog-settings" tabindex="0" class=""><i>image</i>Visual Elements</a>
+        <a data-ui="#dialog-visual" tabindex="0"><i>tune</i>Appearance & Behavior</a>
+      </nav>
+      <div class="medium-space"></div>
+      <div class="page top active" id="dialog-content">
+        <!-- ── Section: Header text ─────────────────────────────────────── -->
+        <h6 class="sd-section-heading">
+          <i>chat_bubble</i>
+          Title & message
+        </h6>
+        <p class="sd-section-help">The big title and the body text shown while onboarding runs.</p>
+
+        <div class="field label border">
+          <input type="text" id="dialog-title" placeholder=" ">
+          <label>Dialog title</label>
+        </div>
+
+        <div class="field textarea label border">
+          <textarea id="dialog-message" rows="3" placeholder=" "></textarea>
+          <label>Dialog message</label>
+          <span class="helper">Markdown is supported. Keep it short — long messages push the per-item rows
+            off-screen.</span>
+        </div>
+
+        <!-- ── Section: Primary button ──────────────────────────────────── -->
+        <h6 class="sd-section-heading">
+          <i>radio_button_checked</i>
+          Primary button
+        </h6>
+        <p class="sd-section-help">
+          The main button. While onboarding runs it is <em>disabled</em> and shows the "while installing" label.
+          When every item succeeds, SwiftDialog auto-enables it and swaps in the "when complete" label.
+          Reboot only fires when the action below is <code>Reboot</code> <strong>and</strong> every item finished
+          successfully — a failed run that the user dismisses never reboots.
+        </p>
+
+        <div class="field label border">
+          <select id="dialog-primary-button-action">
+            <option value="reboot">Reboot the Mac</option>
+            <option value="close">Close dialog (no reboot)</option>
+          </select>
+          <label>Action when clicked</label>
+        </div>
+
+        <div class="grid">
+          <div class="field label border s6">
+            <input type="text" id="dialog-button" placeholder=" ">
+            <label>Label — while installing</label>
+            <span class="helper">Shown disabled during the run.</span>
+          </div>
+
+          <div class="field label border s6">
+            <input type="text" id="dialog-auto-enable-button-text" placeholder=" ">
+            <label>Label — when complete</label>
+            <span class="helper">Should match the action: "Reboot" or "Close".</span>
+          </div>
+        </div>
+
+        <!-- ── Section: Secondary button ────────────────────────────────── -->
+        <h6 class="sd-section-heading">
+          <i>radio_button_unchecked</i>
+          Secondary button
+          <span class="chip small">always-on escape hatch</span>
+        </h6>
+        <p class="sd-section-help">Optional. Visible the whole time, independent of the primary button's auto-enable.
+        </p>
+
+        <div class="grid">
+          <div class="field label border s8">
+            <input type="text" id="dialog-button2-text" placeholder=" ">
+            <label>Button label</label>
+          </div>
+
+          <label class="field border sd-toggle-field s4">
+            <nav>
+              <div class="sd-toggle-label"">
+                <div>Show secondary button</div>
+              </div>
+              <label class=" switch">
+                <input type="checkbox" id="dialog-button2-visible">
+                <span></span>
+          </label>
+          </nav>
+          </label>
+        </div>
+      </div>
+      <div class="page top" id="dialog-settings">
+        <h6>
+          <i>image</i>
+          Visual Elements
+        </h6>
+        <div class="field label border">
+          <input type="text" id="dialog-icon" value="otkbg.png">
+          <label>Icon Name</label>
+        </div>
+
+        <div class="field label border">
+          <input type="text" id="dialog-banner" value="otk_banner.png">
+          <label>Banner Image Name</label>
+        </div>
+
+        <div class="field label border">
+          <input type="text" id="dialog-banner-title" placeholder=" ">
+          <label>Banner Title (overlay text)</label>
+          <span class="helper">Optional. Renders on top of the banner image.</span>
+        </div>
+
+        <div class="field label border">
+          <input type="number" id="dialog-banner-height" placeholder=" ">
+          <label>Banner Height (px)</label>
+          <span class="helper">Optional. Default 100.</span>
+        </div>
+
+        <div class="field label border">
+          <input type="text" id="dialog-highlight-color" placeholder=" ">
+          <label>Highlight Color (hex)</label>
+          <span class="helper">e.g. #008080. Default #808080.</span>
+        </div>
+
+      </div>
+
+      <div class="page top" id="dialog-visual">
+        <h6>
+          <i>tune</i>
+          Appearance & Behavior
+        </h6>
+
+        <div class="field label border">
+          <select id="dialog-preset">
+            <option value="preset1">Classic Sidebar</option>
+            <option value="preset2">Card Style</option>
+            <option value="preset3">Compact List</option>
+          </select>
+          <label>Appearance</label>
+        </div>
+
+        <div class="field label border">
+          <select id="dialog-appearance">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="auto">Auto</option>
+          </select>
+          <label>Appearance</label>
+        </div>
+
+        <div class="field label border">
+          <input type="number" id="dialog-width" value=1024>
+          <label>Width (px)</label>
+        </div>
+
+        <div class="field label border">
+          <input type="number" id="dialog-height" value=650>
+          <label>Height (px)</label>
+        </div>
+
+        <!-- Switches  -->
+        <div class="field middle-align">
+          <nav>
+            <div class="max">
+              <h6>Blur Screen</h6>
+              <div>Blur the background</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="dialog-blurscreen" checked>
+              <span></span>
+            </label>
+          </nav>
+        </div>
+
+        <div class="field middle-align">
+          <nav>
+            <div class="max">
+              <h6>Moveable Dialog</h6>
+              <div>Allow dialog to be moved</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="dialog-moveable" checked>
+              <span></span>
+            </label>
+          </nav>
+        </div>
+
+        <div class="field middle-align">
+          <nav>
+            <div class="max">
+              <h6>Keep On Top</h6>
+              <div>Make sure dialog stays on top</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="dialog-ontop" checked>
+              <span></span>
+            </label>
+          </nav>
+        </div>
+
+        <div class="field middle-align">
+          <nav>
+            <div class="max">
+              <h6>Fullscreen</h6>
+              <div>Take over the entire screen</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="dialog-fullscreen">
+              <span></span>
+            </label>
+          </nav>
+        </div>
+      </div>
+    </div>
+    <footer class="fixed">
+      <nav class="right-align"><button onclick="saveDialogSettings()" class="button fill">
+          <i>save</i>
+          <span>Save Settings</span>
+        </button>
+        <button class="button" onclick="ui('#dialog-settings-modal')">Cancel</button>
+      </nav>
+    </footer>
+  </dialog>
+
+  <script>
+    // ---- Constants --------------------------------------------------------
+    // SwiftDialog inspect mode requires build >= 4955; pinned to 3.1.0 (build 4994).
+    const SWIFTDIALOG_INSTALLER_URL = "https://github.com/swiftDialog/swiftDialog/releases/download/v3.1.0/dialog-3.1.0-4994.pkg";
+
+    // ---- Utilities --------------------------------------------------------
+    const $ = id => document.getElementById(id);
+    const setVal = (id, val) => { const el = $(id); if (el) el.value = val ?? ''; };
+    const setCheck = (id, val) => { const el = $(id); if (el) el.checked = !!val; };
+    const setText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
+    const numOrUndef = v => { const n = Number(v); return Number.isFinite(n) ? n : undefined; };
+    const boolFromStr = v => v === 'true' ? true : v === 'false' ? false : undefined;
+    const esc = s => (s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    // Recompute 0-based index on all top-level items (not prerequisites)
+    function updateItemIndexes() {
+      state.items.forEach((item, i) => {
+        item.index = i;
+      });
+    }
+
+
+
+    // --- ID sanitizer: from "Company Portal" -> "companyportal"
+    function makeItemId(name) {
+      if (!name || typeof name !== 'string') return 'item';
+      const ascii = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const compact = ascii.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return compact || 'item';
+    }
+
+    // Get all IDs in use (prereqs, items, groups, nested)
+    function getAllIds() {
+      const ids = new Set();
+      function walk(arr) {
+        for (const item of arr) {
+          if (item.id) ids.add(item.id);
+          if (item.type === 'group' && Array.isArray(item.apps)) walk(item.apps);
+        }
+      }
+      walk(state.items);
+      for (const item of state.prerequisites) {
+        if (item.id) ids.add(item.id);
+      }
+      return ids;
+    }
+
+    // Ensure uniqueness (append -2, -3, ...)
+    function makeUniqueId(baseId) {
+      const ids = getAllIds();
+      if (!ids.has(baseId)) return baseId;
+      let n = 2;
+      while (ids.has(`${baseId}-${n}`)) n++;
+      return `${baseId}-${n}`;
+    }
+
+    // Clean empty values from objects
+    const prune = obj => {
+      const result = Array.isArray(obj) ? [] : {};
+      for (const [key, value] of Object.entries(obj)) {
+        if (value === '' || value === undefined || value === null) continue;
+        if (Array.isArray(value)) {
+          if (value.length) result[key] = value;
+        } else if (typeof value === 'object' && value !== null) {
+          const cleaned = prune(value);
+          if (Object.keys(cleaned).length) result[key] = cleaned;
+        } else {
+          result[key] = value;
+        }
+      }
+      return result;
+    };
+
+    // ---- List Editor Classes -----------------------------------------------
+    class ListEditor {
+      constructor(listEl, addInputEl, addBtnEl, validate) {
+        this.listEl = listEl;
+        this.addInputEl = addInputEl;
+        this.values = [];
+        // Optional validator: function(value) -> string | null. Return a
+        // string describing the problem to reject the add (the string is
+        // shown in a snackbar); return null/undefined to accept.
+        this.validate = validate || null;
+
+        addBtnEl.addEventListener('click', () => {
+          const value = addInputEl.value.trim();
+          if (!value) return;
+          if (this.validate) {
+            const err = this.validate(value);
+            if (err) {
+              snackbar('error', `❌ ${err}`, 2500, false);
+              return;
+            }
+          }
+          this.values.push(value);
+          addInputEl.value = '';
+          this.render();
+          updateJSONView();
+        });
+
+        // Allow Enter key to add items
+        addInputEl.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            addBtnEl.click();
+          }
+        });
+      }
+
+      set(values) {
+        this.values = Array.isArray(values) ? [...values] : [];
+        this.render();
+      }
+
+      get() {
+        return [...this.values];
+      }
+
+      removeAt(index) {
+        this.values.splice(index, 1);
+        this.render();
+        updateJSONView();
+      }
+
+      render() {
+        this.listEl.innerHTML = '';
+        this.values.forEach((value, index) => {
+          const item = document.createElement('div');
+          item.className = 'command-item';
+
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.value = value;
+          input.addEventListener('input', () => {
+            this.values[index] = input.value;
+            updateJSONView();
+          });
+
+          const deleteBtn = document.createElement('button');
+          deleteBtn.className = 'button small fill error';
+          deleteBtn.innerHTML = '<i>delete</i>';
+          deleteBtn.addEventListener('click', () => this.removeAt(index));
+
+          item.appendChild(input);
+          item.appendChild(deleteBtn);
+          this.listEl.appendChild(item);
+        });
+      }
+    }
+
+    // Type-aware variables editor. Each entry has a key, a type toggle
+    // (string | array), and an appropriate value UI:
+    //   - string: single-line input
+    //   - array:  vertical list of inputs, one per entry, with add/remove
+    // No raw-JSON typing is needed for the array case. apps.json's
+    // custom_variables format (string or array per key) is preserved on save.
+    class KVEditor {
+      constructor(listEl, keyEl, valEl, addBtnEl, typeEl) {
+        this.listEl = listEl;
+        this.keyEl = keyEl;
+        this.valEl = valEl;
+        this.typeEl = typeEl || null;
+        this.dict = {};
+
+        addBtnEl.addEventListener('click', () => {
+          const key = keyEl.value.trim();
+          if (!key) return;
+          const type = this.typeEl ? this.typeEl.value : 'string';
+          let parsedValue;
+          if (type === 'array') {
+            // One entry per line; preserve blank lines as empty entries? No —
+            // strip empties for sanity. Users can always add empty rows later.
+            parsedValue = valEl.value.split(/\r?\n/).map(s => s.trim()).filter(s => s.length > 0);
+          } else {
+            parsedValue = valEl.value.trim();
+          }
+          this.dict[key] = parsedValue;
+          keyEl.value = '';
+          valEl.value = '';
+          if (this.typeEl) this.typeEl.value = 'string';
+          this.render();
+          updateJSONView();
+        });
+      }
+
+      set(obj) {
+        this.dict = { ...(obj || {}) };
+        this.render();
+      }
+
+      get() {
+        return { ...this.dict };
+      }
+
+      remove(key) {
+        delete this.dict[key];
+        this.render();
+        updateJSONView();
+      }
+
+      // Rename a key while preserving the value and insertion order.
+      renameKey(oldKey, newKey) {
+        if (oldKey === newKey) return;
+        const next = {};
+        for (const [k, v] of Object.entries(this.dict)) {
+          next[k === oldKey ? newKey : k] = v;
+        }
+        this.dict = next;
+      }
+
+      render() {
+        this.listEl.innerHTML = '';
+        for (const key of Object.keys(this.dict)) {
+          this.listEl.appendChild(this._renderRow(key));
+        }
+      }
+
+      _renderRow(key) {
+        const row = document.createElement('div');
+        row.className = 'command-item';
+        row.style.flexDirection = 'column';
+        row.style.alignItems = 'stretch';
+        row.style.gap = '0.6rem';
+
+        // Top bar: key + type select + delete
+        const top = document.createElement('div');
+        top.style.display = 'flex';
+        top.style.gap = '0.5rem';
+        top.style.alignItems = 'center';
+
+        const keyInput = document.createElement('input');
+        keyInput.type = 'text';
+        keyInput.value = key;
+        keyInput.placeholder = 'key';
+        keyInput.style.flex = '1';
+
+        const typeSelect = document.createElement('select');
+        typeSelect.innerHTML = '<option value="string">string</option><option value="array">array</option>';
+        typeSelect.value = Array.isArray(this.dict[key]) ? 'array' : 'string';
+        typeSelect.style.maxWidth = '110px';
+        typeSelect.style.padding = '0.4rem 0.5rem';
+        typeSelect.style.border = '1px solid var(--outline-variant)';
+        typeSelect.style.borderRadius = '8px';
+        typeSelect.style.background = 'var(--surface)';
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'button small fill error';
+        deleteBtn.innerHTML = '<i>delete</i>';
+        deleteBtn.title = 'Remove variable';
+
+        top.appendChild(keyInput);
+        top.appendChild(typeSelect);
+        top.appendChild(deleteBtn);
+        row.appendChild(top);
+
+        // Value area — re-rendered when type toggles
+        const valueArea = document.createElement('div');
+        valueArea.style.display = 'flex';
+        valueArea.style.flexDirection = 'column';
+        valueArea.style.gap = '0.4rem';
+        valueArea.style.paddingLeft = '0.25rem';
+        row.appendChild(valueArea);
+
+        // Track the current key for this row in a closure so rename works.
+        const ctx = { key };
+
+        const renderValue = () => {
+          valueArea.innerHTML = '';
+          const v = this.dict[ctx.key];
+
+          if (Array.isArray(v)) {
+            v.forEach((entry, idx) => {
+              const entryRow = document.createElement('div');
+              entryRow.style.display = 'flex';
+              entryRow.style.gap = '0.4rem';
+              entryRow.style.alignItems = 'center';
+
+              const entryInput = document.createElement('input');
+              entryInput.type = 'text';
+              entryInput.value = entry;
+              entryInput.placeholder = 'entry';
+              entryInput.style.flex = '1';
+              entryInput.addEventListener('input', () => {
+                v[idx] = entryInput.value;
+                updateJSONView();
+              });
+
+              const removeEntry = document.createElement('button');
+              removeEntry.className = 'button small transparent circle';
+              removeEntry.innerHTML = '<i>close</i>';
+              removeEntry.title = 'Remove entry';
+              removeEntry.addEventListener('click', () => {
+                v.splice(idx, 1);
+                renderValue();
+                updateJSONView();
+              });
+
+              entryRow.appendChild(entryInput);
+              entryRow.appendChild(removeEntry);
+              valueArea.appendChild(entryRow);
+            });
+
+            const addRowBtn = document.createElement('button');
+            addRowBtn.className = 'button small transparent';
+            addRowBtn.innerHTML = '<i>add</i><span>Add item</span>';
+            addRowBtn.style.alignSelf = 'flex-start';
+            addRowBtn.addEventListener('click', () => {
+              v.push('');
+              renderValue();
+              updateJSONView();
+              // Focus the new last input.
+              const inputs = valueArea.querySelectorAll('input');
+              if (inputs.length) inputs[inputs.length - 1].focus();
+            });
+            valueArea.appendChild(addRowBtn);
+          } else {
+            const stringInput = document.createElement('input');
+            stringInput.type = 'text';
+            stringInput.value = v == null ? '' : String(v);
+            stringInput.placeholder = 'value';
+            stringInput.addEventListener('input', () => {
+              this.dict[ctx.key] = stringInput.value;
+              updateJSONView();
+            });
+            valueArea.appendChild(stringInput);
+          }
+        };
+
+        // Key rename: defer until blur so partial typing doesn't shuffle the dict.
+        keyInput.addEventListener('change', () => {
+          const newKey = keyInput.value.trim();
+          if (!newKey || newKey === ctx.key) {
+            keyInput.value = ctx.key; // revert empty rename
+            return;
+          }
+          if (Object.prototype.hasOwnProperty.call(this.dict, newKey)) {
+            snackbar('error', `❌ Variable '${newKey}' already exists`, 2200, false);
+            keyInput.value = ctx.key;
+            return;
+          }
+          this.renameKey(ctx.key, newKey);
+          ctx.key = newKey;
+          updateJSONView();
+        });
+
+        typeSelect.addEventListener('change', () => {
+          const current = this.dict[ctx.key];
+          if (typeSelect.value === 'array') {
+            if (Array.isArray(current)) return;
+            const s = current == null ? '' : String(current);
+            this.dict[ctx.key] = s ? s.split(/\r?\n/).map(x => x.trim()).filter(Boolean) : [];
+          } else {
+            if (!Array.isArray(current)) return;
+            this.dict[ctx.key] = current.join('\n');
+          }
+          renderValue();
+          updateJSONView();
+        });
+
+        deleteBtn.addEventListener('click', () => this.remove(ctx.key));
+
+        renderValue();
+        return row;
+      }
+    }
+
+    // ---- State Management --------------------------------------------------
+    const state = {
+      metadata: {
+        created: new Date().toISOString(),
+        description: 'Enterprise macOS application deployment configuration',
+        organization: 'Company',
+        contact: 'it@example.com'
+      },
+      global_settings: {
+        version: '1.0',
+        default_retries: 2,
+        default_retry_delay: 5,
+        default_dl_timeout: 300,
+        kill_apps_pre: [],
+        kill_apps_post: []
+      },
+      swift_dialog_settings: {
+        message: 'Please wait while we configure your Mac...',
+        title: 'MacOS Onboarding',
+        blurscreen: true,
+        preset: 'preset1',
+        appearance: 'dark',
+        moveable: true,
+        ontop: true,
+        fullscreen: false,
+        button1text: 'Please Wait...',
+        button1disabled: true,
+        autoEnableButtonText: 'Reboot',
+        autoEnableButton: true,
+        primary_button_action: 'reboot',
+        icon: 'otkbg.png',
+        bannerimage: 'otk_banner.png',
+        width: 1024,
+        height: 650
+      },
+      prerequisites: [],
+      items: []
+    };
+
+    const defaultState = JSON.parse(JSON.stringify(state));
+
+    // Find item by ID with path information
+    function findItemById(id, arr = state.items, parent = null) {
+      for (let i = 0; i < arr.length; i++) {
+        const item = arr[i];
+        if (item.id === id) {
+          return { item, index: i, parent, container: arr };
+        }
+        if (item.type === 'group' && Array.isArray(item.apps)) {
+          const found = findItemById(id, item.apps, item);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    // Find prerequisite by ID
+    function findPrereqById(id) {
+      const index = state.prerequisites.findIndex(item => item.id === id);
+      if (index !== -1) {
+        return { item: state.prerequisites[index], index, container: state.prerequisites };
+      }
+      return null;
+    }
+
+
+    // ---- Rendering ---------------------------------------------------------
+    function render() {
+      // Ensure top-level indexes are always in sync with current order
+      updateItemIndexes();
+
+      // Render prerequisites
+      const prereqContainer = $('prereq-list');
+      prereqContainer.innerHTML = state.prerequisites.map(item => renderPrereqItem(item)).join('');
+      // Render regular items
+      const container = $('top-list');
+      container.innerHTML = state.items.map(item => renderItem(item, 0)).join('');
+      wireEvents();
+      setupDragAndDrop();
+      updateJSONView();
+    }
+
+    function renderPrereqItem(item) {
+      const typeChip = `<span class="chip small fill ${item.type === 'installation' ? 'secondary' : 'tertiary'}">${item.type.toUpperCase()}</span>`;
+      const title = esc(item.name) || '(Unnamed)';
+
+      return `
+        <article class="otk-item no-elevate round" data-id="${item.id}" data-type="${item.type}" data-is-prereq="true">
+          <div class="padding">
+            <div class="item-header">
+              <div class="item-title">
+                <i>${item.type === 'installation' ? 'get_app' : 'settings'}</i>
+                <span>${title}</span>
+                ${typeChip}
+                <span class="chip small fill primary">PREREQUISITE</span>
+              </div>
+              <div class="item-actions">
+                <button class="button small transparent" data-action="edit" data-id="${item.id}" data-is-prereq="true" title="Edit prerequisite">
+                  <i>edit</i>
+                </button>
+                <button class="button small transparent" data-action="duplicate" data-id="${item.id}" data-is-prereq="true" title="Duplicate prerequisite">
+                  <i>content_copy</i>
+                </button>
+                <button class="button small fill error" data-action="delete" data-id="${item.id}" data-is-prereq="true" title="Delete prerequisite">
+                  <i>delete</i>
+                </button>
+                <div class="drag-handle" title="Drag to reorder">
+                  <i>drag_indicator</i>
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              ${item.download_url ? `<div class="col s12"><small class="small-text">🔗 Download URL configured</small></div>` : ''}
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderItem(item, depth) {
+      const typeChip = item.type === 'group'
+        ? `<span data-action="edit" data-id="${item.id}"class="chip small fill primary">GROUP</span>`
+        : `<span data-action="edit" data-id="${item.id}" class="chip small fill ${item.type === 'installation' ? 'secondary' : 'tertiary'}">${item.type.toUpperCase()}</span>`;
+
+      const title = esc(item.name) || '(Unnamed)';
+      const marginLeft = depth * 2;
+
+      if (item.type === 'group') {
+        return `
+          <article class="otk-item no-elevate round" data-id="${item.id}" data-type="group" style="margin-left: ${marginLeft}rem;">
+            <div class="padding">
+              <div class="item-header">
+                <div class="item-title">
+                  <i>folder</i>
+                  <span>${title}</span>
+                  ${typeChip}
+                </div>
+                <div class="item-actions">
+                  <button class="button small" data-action="add-child" data-group-id="${item.id}" title="Add item to group">
+                    <i>add</i>
+                  </button>
+                  <button class="button small transparent" data-action="edit" data-id="${item.id}" title="Edit group">
+                    <i>edit</i>
+                  </button>
+                  <button class="button small fill error" data-action="delete" data-id="${item.id}" title="Delete group">
+                    <i>delete</i>
+                  </button>
+                  <div class="drag-handle" title="Drag to reorder">
+                    <i>drag_indicator</i>
+                  </div>
+                </div>
+              </div>
+              ${item.icon ? `<p class="small-text">Icon: ${esc(item.icon)}</p>` : ''}
+            </div>
+            <div class="nested-items" data-group-id="${item.id}">
+              ${(item.apps || []).map(child => renderItem(child, depth + 1)).join('')}
+            </div>
+          </article>
+        `;
+      }
+
+      return `
+        <article class="otk-item no-elevate round" data-id="${item.id}" data-type="${item.type}" style="margin-left: ${marginLeft}rem;">
+          <div class="padding">
+            <div class="item-header">
+              <div class="item-title">
+                <i>${item.type === 'installation' ? 'get_app' : 'settings'}</i>
+                <span>${title}</span>
+                ${typeChip}
+              </div>
+              <div class="item-actions">
+                <button class="button small transparent" data-action="edit" data-id="${item.id}" title="Edit item">
+                  <i>edit</i>
+                </button>
+                <button class="button small transparent" data-action="duplicate" data-id="${item.id}" title="Duplicate item">
+                  <i>content_copy</i>
+                </button>
+                <button class="button small fill error" data-action="delete" data-id="${item.id}" title="Delete item">
+                  <i>delete</i>
+                </button>
+                <div class="drag-handle" title="Drag to reorder">
+                  <i>drag_indicator</i>
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              ${item.download_url ? `<div class="col s12"><small class="small-text">🔗 Download URL configured</small></div>` : ''}
+              ${item.icon ? `<div class="col s12"><small class="small-text">🖼️ Icon: ${esc(item.icon)}</small></div>` : ''}
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    function wireEvents() {
+      // Edit buttons
+      document.querySelectorAll('[data-action="edit"]').forEach(btn => {
+        btn.onclick = () => {
+          const id = btn.dataset.id;
+          const isPrereq = btn.dataset.isPrereq === 'true';
+
+          if (isPrereq) {
+            const found = findPrereqById(id);
+            if (!found) return;
+            openItemEditor(found.item, '', true);
+          } else {
+            const found = findItemById(id);
+            if (!found) return;
+
+            if (found.item.type === 'group') {
+              openGroupEditor(found.item);
+            } else {
+              const parentGroupId = found.parent && found.parent.type === 'group' ? found.parent.id : '';
+              openItemEditor(found.item, parentGroupId, false);
+            }
+          }
+        };
+      });
+
+      // Delete buttons
+      document.querySelectorAll('[data-action="delete"]').forEach(btn => {
+        btn.onclick = () => {
+          const id = btn.dataset.id;
+          const isPrereq = btn.dataset.isPrereq === 'true';
+
+          if (isPrereq) {
+            const found = findPrereqById(id);
+            if (!found) return;
+            const itemName = found.item.name || 'this prerequisite';
+            if (!confirm(`Are you sure you want to delete "${itemName}"?`)) return;
+            found.container.splice(found.index, 1);
+          } else {
+            const found = findItemById(id);
+            if (!found) return;
+            const itemName = found.item.name || 'this item';
+            if (!confirm(`Are you sure you want to delete "${itemName}"?`)) return;
+            found.container.splice(found.index, 1);
+          }
+
+          render();
+        };
+      });
+
+      // Duplicate buttons
+      document.querySelectorAll('[data-action="duplicate"]').forEach(btn => {
+        btn.onclick = () => {
+          const id = btn.dataset.id;
+          const isPrereq = btn.dataset.isPrereq === 'true';
+
+          if (isPrereq) {
+            const found = findPrereqById(id);
+            if (!found) return;
+            const duplicate = JSON.parse(JSON.stringify(found.item));
+            duplicate.id = makeUniqueId(makeItemId(duplicate.name));
+            duplicate.name = (duplicate.name || 'Item') + ' (Copy)';
+            found.container.splice(found.index + 1, 0, duplicate);
+          } else {
+            const found = findItemById(id);
+            if (!found) return;
+            const duplicate = JSON.parse(JSON.stringify(found.item));
+            duplicate.id = makeUniqueId(makeItemId(duplicate.name));
+            duplicate.name = (duplicate.name || 'Item') + ' (Copy)';
+            found.container.splice(found.index + 1, 0, duplicate);
+          }
+
+          render();
+        };
+      });
+
+      // Add child to group buttons
+      document.querySelectorAll('[data-action="add-child"]').forEach(btn => {
+        btn.onclick = () => {
+          const groupId = btn.dataset.groupId;
+          openItemEditor(null, groupId, false);
+        };
+      });
+    }
+
+    // ---- Drag and Drop -----------------------------------------------------
+    function sortableOptions() {
+      return {
+        handle: '.drag-handle',
+        animation: 300,
+        group: { name: 'deployment-items', pull: true, put: true },
+        ghostClass: 'surface-variant',
+        chosenClass: 'primary-container',
+        emptyInsertThreshold: 16,
+        direction: 'vertical',
+        fallbackOnBody: true,
+        onEnd: handleDragEnd,
+        onMove: validateMove
+      };
+    }
+
+    function setupDragAndDrop() {
+      Sortable.create($('top-list'), sortableOptions());
+      // Enable drag-and-drop reordering for prerequisites
+      Sortable.create($('prereq-list'), {
+        handle: '.drag-handle',
+        animation: 300,
+        group: { name: 'prereq-only', pull: false, put: false },
+        ghostClass: 'surface-variant',
+        chosenClass: 'primary-container',
+        direction: 'vertical',
+        fallbackOnBody: true,
+        onEnd: handlePrereqDragEnd
+      });
+      document.querySelectorAll('.nested-items').forEach(container => {
+        Sortable.create(container, sortableOptions());
+      });
+    }
+
+    function validateMove(evt) {
+      const draggedType = evt.dragged?.dataset?.type;
+      const isTargetNested = !!evt.to.closest('[data-group-id]');
+
+      // Don't allow groups to be nested in other groups
+      if (draggedType === 'group' && isTargetNested) {
+        return false;
+      }
+      return true;
+    }
+
+    function handleDragEnd(evt) {
+      const itemId = evt.item.dataset.id;
+      const fromContainer = evt.from.closest('[data-group-id]');
+      const toContainer = evt.to.closest('[data-group-id]');
+      const fromArray = fromContainer
+        ? findItemById(fromContainer.dataset.groupId).item.apps
+        : state.items;
+      const toArray = toContainer
+        ? findItemById(toContainer.dataset.groupId).item.apps
+        : state.items;
+
+      const fromIndex = fromArray.findIndex(item => item.id === itemId);
+      if (fromIndex === -1) return;
+
+      const [movedItem] = fromArray.splice(fromIndex, 1);
+      toArray.splice(evt.newIndex, 0, movedItem);
+
+      // Recompute indexes only when affecting top-level array
+      updateItemIndexes();
+      render();
+    }
+
+    function handlePrereqDragEnd(evt) {
+      const fromIndex = evt.oldIndex;
+      const toIndex = evt.newIndex;
+      if (fromIndex === toIndex) return;
+      if (fromIndex < 0 || toIndex < 0) return;
+      const [moved] = state.prerequisites.splice(fromIndex, 1);
+      state.prerequisites.splice(toIndex, 0, moved);
+      render();
+    }
+
+    // ---- Modal Functions ---------------------------------------------------
+    // NOTE: Beer.css's `.field` uses its own display (flex/grid). Setting an
+    // inline `display: block` breaks that layout. To hide, set inline
+    // `display: none`; to show, strip the inline style so the class wins.
+    function toggleInstallationFields(type) {
+      const isInstallation = type === 'installation';
+      document.querySelectorAll('#item-modal .installation-only').forEach(field => {
+        if (isInstallation) {
+          field.removeAttribute('style');
+        } else {
+          field.style.display = 'none';
+        }
+      });
+    }
+
+    function togglePrereqFields(isPrereq) {
+      document.querySelectorAll('#item-modal .non-prereq-only').forEach(field => {
+        if (isPrereq) {
+          field.style.display = 'none';
+        } else {
+          field.removeAttribute('style');
+        }
+      });
+    }
+
+    function removeItemFromRegularListsById(id) {
+      // Try top-level first
+      const topIndex = state.items.findIndex(x => x.id === id);
+      if (topIndex !== -1) {
+        const [removed] = state.items.splice(topIndex, 1);
+        return removed;
+      }
+      // Search groups recursively
+      const stack = [...state.items];
+      while (stack.length) {
+        const node = stack.pop();
+        if (node && node.type === 'group' && Array.isArray(node.apps)) {
+          const idx = node.apps.findIndex(x => x.id === id);
+          if (idx !== -1) {
+            const [removed] = node.apps.splice(idx, 1);
+            return removed;
+          }
+          stack.push(...node.apps);
+        }
+      }
+      return null;
+    }
+
+    function removeItemFromPrereqsById(id) {
+      const idx = state.prerequisites.findIndex(x => x.id === id);
+      if (idx !== -1) {
+        const [removed] = state.prerequisites.splice(idx, 1);
+        return removed;
+      }
+      return null;
+    }
+
+    // ---- Group Editor ------------------------------------------------------
+    function openGroupEditor(group) {
+      const g = group || {
+        id: '',
+        type: 'group',
+        name: '',
+        icon: '',
+        subtitle: '',
+        apps: []
+      };
+
+      setVal('group-id', g.id || '');
+      setVal('group-name', g.name || '');
+      setVal('group-icon', g.icon || '');
+      setVal('group-subtitle', g.subtitle || '');
+
+      ui('#group-modal');
+    }
+
+    // ---- Item Editor -------------------------------------------------------
+    // Initialize list editors
+    // Validator for shell command entries: the bash runtime requires every
+    // command in detection_commands / pre_install_commands / post_install_commands
+    // to start with `root:` or `user:` so it knows which uid to run as.
+    // Without the prefix the orchestrator defaults to root, but the helper
+    // text says to be explicit — flag missing prefixes here.
+    const requireShellPrefix = v =>
+      /^(root|user):.+/.test(v)
+        ? null
+        : "Command must start with 'root:' or 'user:' (e.g. root:/usr/bin/test -d /Applications/Foo.app)";
+    const leItemPre = new ListEditor($('le-item-pre'), $('le-item-pre-input'), $('le-item-pre-add'), requireShellPrefix);
+    const leItemPost = new ListEditor($('le-item-post'), $('le-item-post-input'), $('le-item-post-add'), requireShellPrefix);
+    const leItemDetect = new ListEditor($('le-item-detect'), $('le-item-detect-input'), $('le-item-detect-add'), requireShellPrefix);
+    const leItemKill = new ListEditor($('le-item-kill'), $('le-item-kill-input'), $('le-item-kill-add'));
+    const leItemKV = new KVEditor($('le-item-kv'), $('le-item-kv-key'), $('le-item-kv-val'), $('le-item-kv-add'), $('le-item-kv-type'));
+
+    // Toggle the value input's placeholder/rows based on the selected type
+    // for the "add variable" form below the list. Pure UX hint — the KVEditor
+    // reads from typeEl.value at add-time regardless.
+    $('le-item-kv-type').addEventListener('change', () => {
+      const valEl = $('le-item-kv-val');
+      if ($('le-item-kv-type').value === 'array') {
+        valEl.placeholder = 'One entry per line';
+        valEl.rows = 4;
+      } else {
+        valEl.placeholder = ' ';
+        valEl.rows = 2;
+      }
+    });
+
+    // ---- Helper picker -----------------------------------------------------
+    // Templates for the built-in custom commands shipped in
+    // functions/custom-commands.sh. Selecting one fills the corresponding
+    // command input below; the user can edit args before clicking Add.
+    // Keep this list in sync with the functions exposed in custom-commands.sh.
+    const COMMAND_HELPERS = [
+      {
+        label: 'install_rosetta2',
+        template: 'root:install_rosetta2'
+      },
+      {
+        label: 'configure_dock <items...>',
+        template: 'user:configure_dock /System/Applications/System\\ Settings.app /Applications/Microsoft\\ Edge.app dir-Downloads:created:stack:fan'
+      },
+      {
+        label: 'rename_device --nametemplate ...',
+        template: 'root:rename_device --nametemplate "mac-{serialnum}"'
+      },
+      {
+        label: 'set_browser_default <app_name>',
+        template: 'user:set_browser_default "Microsoft Edge"'
+      },
+      {
+        label: 'set_default_mail_client <bundle_id>',
+        template: 'user:set_default_mail_client com.microsoft.outlook'
+      },
+      {
+        label: 'set_login_item <app-path>',
+        template: 'user:set_login_item /Applications/OneDrive.app'
+      },
+      {
+        label: 'set_login_item --remove <app-path>',
+        template: 'user:set_login_item --remove /Applications/OneDrive.app'
+      },
+      {
+        label: 'set_default_locale <locale>',
+        template: 'root:set_default_locale en_GB'
+      },
+      {
+        label: 'show_action_dialog ...',
+        template: "user:show_action_dialog --title 'Action required' --message 'Toggle on **Screen Recording** for these apps.\\n\\n- Edge\\n- Chrome\\n\\nClick **Done** when finished.' --timer 600"
+      }
+    ];
+
+    function attachHelperPicker(selectId, inputId) {
+      const sel = $(selectId);
+      const inp = $(inputId);
+      if (!sel || !inp) return;
+      sel.innerHTML = '<option value="">— pick a helper to insert —</option>' +
+        COMMAND_HELPERS.map(h => `<option value="${h.template.replace(/"/g, '&quot;')}">${h.label}</option>`).join('');
+      sel.addEventListener('change', () => {
+        if (sel.value) {
+          inp.value = sel.value;
+          inp.focus();
+          // reset the picker so the user can re-pick the same option later
+          sel.value = '';
+        }
+      });
+    }
+    attachHelperPicker('le-item-pre-helper', 'le-item-pre-input');
+    attachHelperPicker('le-item-post-helper', 'le-item-post-input');
+    attachHelperPicker('le-item-detect-helper', 'le-item-detect-input');
+
+    function openItemEditor(item, parentGroupId, isPrereq = false) {
+      const defaultItem = {
+        id: '',
+        type: 'installation',
+        name: '',
+        icon: '',
+        download_url: '',
+        download_options: '',
+        alt_app_name: '',
+        retries: 3,
+        timeout: 600,
+        download_path: '',
+        install_path: '',
+        installer_name: '',
+        app_path: '',
+        detection_commands: [],
+        pre_install_commands: [],
+        post_install_commands: [],
+        kill_apps: [],
+        custom_variables: {},
+        detect_all: false
+      };
+
+      const it = item || defaultItem;
+
+      setText('item-modal-title', item ? '✏️ Edit Item' : '➕ Add Item');
+      setVal('item-id', it.id || '');
+      setVal('parent-group-id', parentGroupId || '');
+      setCheck('item-is-prereq', isPrereq);
+      setVal('item-type', it.type || 'installation');
+      setVal('item-name', it.name || '');
+      setVal('item-icon', it.icon || '');
+      setVal('item-download_url', it.download_url || '');
+      setVal('item-download_options', it.download_options || '');
+      setVal('item-alt_app_name', it.alt_app_name || '');
+      setVal('item-retries', it.retries ?? '');
+      setVal('item-timeout', it.timeout ?? '');
+      setVal('item-download_path', it.download_path || '');
+      setVal('item-install_path', it.install_path || '');
+      setVal('item-installer_name', it.installer_name || '');
+      setVal('item-app_path', it.app_path || '');
+      setVal('item-archive_password', it.archive_password || '');
+      setVal('item-detect_all', it.detect_all ? 'true' : 'false');
+
+      // Set list editor values. detection_commands / pre_/post_install_commands
+      // may be either a string or an array in apps.json (the bash runtime
+      // accepts both); coerce so the editor always sees an array.
+      const coerceToArray = v => Array.isArray(v) ? v : (typeof v === 'string' && v ? [v] : []);
+      leItemPre.set(coerceToArray(it.pre_install_commands));
+      leItemPost.set(coerceToArray(it.post_install_commands));
+      leItemDetect.set(coerceToArray(it.detection_commands));
+      leItemKill.set(it.kill_apps || []);
+      leItemKV.set(it.custom_variables || {});
+
+      // Reset to first tab
+      document.querySelectorAll('#item-modal .tabs a').forEach((tab, index) => {
+        tab.classList.toggle('active', index === 0);
+      });
+      document.querySelectorAll('#item-modal .page').forEach((page, index) => {
+        page.classList.toggle('active', index === 0);
+      });
+
+      toggleInstallationFields($('item-type').value);
+      togglePrereqFields(isPrereq);
+      ui('#item-modal');
+    }
+
+    // Fields owned by the item form. Any OTHER key found on an existing item
+    // (hand-added advanced keys like archive_password, subtitle, index) is
+    // carried over on save, so builder edits never strip manual additions -
+    // same pass-through contract as the global/dialog settings.
+    const FORM_OWNED_ITEM_KEYS = [
+      'id', 'type', 'name', 'icon', 'download_url', 'download_options',
+      'retries', 'timeout', 'download_path', 'detection_commands',
+      'pre_install_commands', 'post_install_commands', 'kill_apps',
+      'custom_variables', 'detect_all', 'alt_app_name', 'install_path',
+      'installer_name', 'app_path', 'archive_password'
+    ];
+
+    function readItemFromForm(id, existingItem = null) {
+      const passthrough = {};
+      if (existingItem) {
+        for (const k of Object.keys(existingItem)) {
+          if (!FORM_OWNED_ITEM_KEYS.includes(k)) passthrough[k] = existingItem[k];
+        }
+      }
+      const type = $('item-type').value || 'installation';
+      const obj = {
+        ...passthrough,
+        id,
+        type,
+        name: $('item-name').value.trim(),
+        icon: $('item-icon').value.trim(),
+        download_url: $('item-download_url').value.trim(),
+        download_options: $('item-download_options').value.trim(),
+        retries: numOrUndef($('item-retries').value),
+        timeout: numOrUndef($('item-timeout').value),
+        download_path: $('item-download_path').value.trim(),
+        archive_password: $('item-archive_password').value.trim(),
+        detection_commands: leItemDetect.get(),
+        post_install_commands: leItemPost.get(),
+        kill_apps: leItemKill.get(),
+        custom_variables: leItemKV.get(),
+        detect_all: boolFromStr($('item-detect_all').value) ?? false
+      };
+
+      if (type === 'installation') {
+        obj.alt_app_name = $('item-alt_app_name').value.trim();
+        obj.install_path = $('item-install_path').value.trim();
+        obj.installer_name = $('item-installer_name').value.trim();
+        obj.app_path = $('item-app_path').value.trim();
+        obj.pre_install_commands = leItemPre.get();
+      }
+
+      return prune(obj);
+    }
+
+
+
+    // ---- Settings Functions ------------------------------------------------
+    function openGlobalSettingsModal() {
+      setVal('org-organization', state.metadata.organization);
+      setVal('org-contact', state.metadata.contact);
+      setVal('org-description', state.metadata.description);
+      setVal('gs-version', state.global_settings.version);
+      setVal('gs-default_retries', state.global_settings.default_retries);
+      setVal('gs-default_dl_timeout', state.global_settings.default_dl_timeout);
+      setVal('gs-default_retry_delay', state.global_settings.default_retry_delay);
+
+      renderGlobalKillApps();
+
+      // Reset to first tab
+      document.querySelectorAll('#global-settings-modal .tabs a').forEach((tab, index) => {
+        tab.classList.toggle('active', index === 0);
+      });
+      document.querySelectorAll('#global-settings-modal .page').forEach((page, index) => {
+        page.classList.toggle('active', index === 0);
+      });
+
+      ui('#global-settings-modal');
+    }
+
+    function saveGlobalSettings() {
+      state.metadata.organization = $('org-organization').value;
+      state.metadata.contact = $('org-contact').value;
+      state.metadata.description = $('org-description').value;
+      state.global_settings.version = $('gs-version').value;
+      state.global_settings.default_retries = numOrUndef($('gs-default_retries').value);
+      state.global_settings.default_dl_timeout = numOrUndef($('gs-default_dl_timeout').value);
+      state.global_settings.default_retry_delay = numOrUndef($('gs-default_retry_delay').value);
+
+      ui('#global-settings-modal');
+      updateJSONView();
+    }
+
+    function addGlobalKillApp(type) {
+      const inputId = `new-global-kill-app-${type}`;
+      const input = $(inputId);
+      const value = input.value.trim();
+      if (value) {
+        const arrayKey = `kill_apps_${type}`;
+        if (!state.global_settings[arrayKey]) {
+          state.global_settings[arrayKey] = [];
+        }
+        state.global_settings[arrayKey].push(value);
+        input.value = '';
+        renderGlobalKillApps();
+        updateJSONView();
+      }
+    }
+
+    function renderGlobalKillApps() {
+      // Render pre-install kill apps
+      const preList = $('global-kill-apps-pre-list');
+      if (!state.global_settings.kill_apps_pre) {
+        state.global_settings.kill_apps_pre = [];
+      }
+
+      preList.innerHTML = state.global_settings.kill_apps_pre.map((app, index) => `
+        <div class="command-item">
+          <span style="flex: 1; padding: 0.5rem;">${esc(app)}</span>
+          <button onclick="removeGlobalKillApp('pre', ${index})" class="button small fill error">
+            <i>delete</i>
+          </button>
+        </div>
+      `).join('');
+
+      // Render post-install kill apps
+      const postList = $('global-kill-apps-post-list');
+      if (!state.global_settings.kill_apps_post) {
+        state.global_settings.kill_apps_post = [];
+      }
+
+      postList.innerHTML = state.global_settings.kill_apps_post.map((app, index) => `
+        <div class="command-item">
+          <span style="flex: 1; padding: 0.5rem;">${esc(app)}</span>
+          <button onclick="removeGlobalKillApp('post', ${index})" class="button small fill error">
+            <i>delete</i>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    function removeGlobalKillApp(type, index) {
+      const arrayKey = `kill_apps_${type}`;
+      state.global_settings[arrayKey].splice(index, 1);
+      renderGlobalKillApps();
+      updateJSONView();
+    }
+
+    function openDialogSettingsModal() {
+      setVal('dialog-message', state.swift_dialog_settings.message);
+      setVal('dialog-title', state.swift_dialog_settings.title);
+      setVal('dialog-icon', state.swift_dialog_settings.icon);
+      setVal('dialog-banner', state.swift_dialog_settings.bannerimage);
+      setVal('dialog-button', state.swift_dialog_settings.button1text);
+      setVal('dialog-auto-enable-button-text', state.swift_dialog_settings.autoEnableButtonText);
+      setVal('dialog-primary-button-action', state.swift_dialog_settings.primary_button_action || 'reboot');
+      setVal('dialog-button2-text', state.swift_dialog_settings.button2text || '');
+      setVal('dialog-banner-title', state.swift_dialog_settings.bannerTitle || '');
+      setVal('dialog-banner-height', state.swift_dialog_settings.bannerHeight || '');
+      setVal('dialog-highlight-color', state.swift_dialog_settings.highlightColor || '');
+      setVal('dialog-preset', state.swift_dialog_settings.preset);
+      setVal('dialog-appearance', state.swift_dialog_settings.appearance);
+      setVal('dialog-width', state.swift_dialog_settings.width);
+      setVal('dialog-height', state.swift_dialog_settings.height);
+      setCheck('dialog-blurscreen', state.swift_dialog_settings.blurscreen);
+      setCheck('dialog-moveable', state.swift_dialog_settings.moveable);
+      setCheck('dialog-ontop', state.swift_dialog_settings.ontop);
+      setCheck('dialog-fullscreen', state.swift_dialog_settings.fullscreen);
+      setCheck('dialog-button2-visible', state.swift_dialog_settings.button2visible);
+
+      // Reset to first tab
+      document.querySelectorAll('#dialog-settings-modal .tabs a').forEach((tab, index) => {
+        tab.classList.toggle('active', index === 0);
+      });
+      document.querySelectorAll('#dialog-settings-modal .page').forEach((page, index) => {
+        page.classList.toggle('active', index === 0);
+      });
+
+      ui('#dialog-settings-modal');
+    }
+
+    function saveDialogSettings() {
+      state.swift_dialog_settings.message = $('dialog-message').value;
+      state.swift_dialog_settings.title = $('dialog-title').value;
+      state.swift_dialog_settings.icon = $('dialog-icon').value;
+      state.swift_dialog_settings.bannerimage = $('dialog-banner').value;
+      state.swift_dialog_settings.button1text = $('dialog-button').value;
+      state.swift_dialog_settings.autoEnableButtonText = $('dialog-auto-enable-button-text').value || undefined;
+      state.swift_dialog_settings.primary_button_action = $('dialog-primary-button-action').value;
+      state.swift_dialog_settings.preset = $('dialog-preset').value;
+      state.swift_dialog_settings.appearance = $('dialog-appearance').value;
+      state.swift_dialog_settings.width = numOrUndef($('dialog-width').value);
+      state.swift_dialog_settings.height = numOrUndef($('dialog-height').value);
+      state.swift_dialog_settings.blurscreen = $('dialog-blurscreen').checked;
+      state.swift_dialog_settings.moveable = $('dialog-moveable').checked;
+      state.swift_dialog_settings.ontop = $('dialog-ontop').checked;
+      state.swift_dialog_settings.fullscreen = $('dialog-fullscreen').checked;
+      // Optional inspect-mode visual keys — emitted only when set so they
+      // pass through swift-dialog.sh's `with_entries(select(.value != null))`
+      // filter unchanged. Empty strings/nulls drop out of the JSON.
+      state.swift_dialog_settings.button2text = $('dialog-button2-text').value.trim() || undefined;
+      state.swift_dialog_settings.button2visible = $('dialog-button2-visible').checked || undefined;
+      state.swift_dialog_settings.bannerTitle = $('dialog-banner-title').value.trim() || undefined;
+      state.swift_dialog_settings.bannerHeight = numOrUndef($('dialog-banner-height').value);
+      state.swift_dialog_settings.highlightColor = $('dialog-highlight-color').value.trim() || undefined;
+
+      ui('#dialog-settings-modal');
+      updateJSONView();
+    }
+
+    // ---- Export/Import Functions -------------------------------------------
+    function toExportJSON() {
+      const exportItems = state.items.map(item => {
+        if (item.type !== 'group') return stripUIData(item);
+
+        return prune({
+          type: 'group',
+          id: item.id,
+          name: item.name,
+          index: item.index,
+          icon: item.icon,
+          subtitle: item.subtitle,
+          apps: (item.apps || []).map(stripUIData)
+        });
+      });
+
+      const exportPrereqs = state.prerequisites.map(stripUIData);
+
+      return prune({
+        prerequisites: exportPrereqs,
+        items: exportItems,
+        metadata: state.metadata,
+        global_settings: state.global_settings,
+        swift_dialog_settings: state.swift_dialog_settings
+      });
+    }
+
+    function stripUIData(obj) {
+      // Remove 'apps' for non-groups, but always keep 'id'
+      const { apps, ...clean } = obj;
+      // Remove installation-only fields from config items
+      if (clean.type === 'config') {
+        delete clean.alt_app_name;
+        delete clean.pre_install_commands;
+        delete clean.install_path;
+        delete clean.installer_name;
+        delete clean.app_path;
+      }
+      return prune(clean);
+    }
+
+    function updateJSONView() {
+      $('json-output').textContent = JSON.stringify(toExportJSON(), null, 2);
+    }
+
+    function copyJSON() {
+      const output = $('json-output').textContent;
+      navigator.clipboard.writeText(output)
+        .then(() => snackbar('info', '✅ JSON copied to clipboard!', 1500, false))
+        .catch(() => {
+          // Fallback for older browsers
+          const textarea = document.createElement('textarea');
+          textarea.value = output;
+          document.body.appendChild(textarea);
+          textarea.select();
+          try {
+            document.execCommand('copy');
+            snackbar('info', '✅ JSON copied to clipboard!', 1500, false)
+          } catch (e) {
+            snackbar('error', `❌ Copy failed: ${e.message}`, 1500, false)
+          } finally {
+            document.body.removeChild(textarea);
+          }
+        });
+    }
+
+    function downloadJSON() {
+      const data = toExportJSON();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `deployment-config-${new Date().toISOString().split('T')[0]}.json`;
+      link.click();
+
+      URL.revokeObjectURL(url);
+      // Downloaded JSON is now the on-disk record; in-memory state matches it.
+      clearDirty();
+      snackbar('info', '⬇️ Configuration downloaded!', 1500, false)
+    }
+
+    function fromImportedJSON(data) {
+      state.items = [];
+      state.prerequisites = [];
+      const usedIds = new Set();
+
+      // Helper for unique ID
+      function getUniqueId(baseId) {
+        let id = baseId;
+        let n = 2;
+        while (usedIds.has(id)) {
+          id = `${baseId}-${n++}`;
+        }
+        usedIds.add(id);
+        return id;
+      }
+
+      // Load prerequisites
+      const prereqs = Array.isArray(data.prerequisites) ? data.prerequisites : [];
+      prereqs.forEach(item => {
+        if (item) {
+          let baseId = item.id && typeof item.id === 'string' ? item.id : makeItemId(item.alt_app_name && item.alt_app_name.trim() ? item.alt_app_name : item.name);
+          let id = getUniqueId(baseId);
+          state.prerequisites.push({ id, ...item });
+        }
+      });
+
+      // Load regular items (including groups and nested apps)
+      function importItems(items, targetArr) {
+        (Array.isArray(items) ? items : []).forEach(item => {
+          if (item && item.type === 'group') {
+            let baseId = item.id && typeof item.id === 'string' ? item.id : makeItemId(item.alt_app_name && item.alt_app_name.trim() ? item.alt_app_name : item.name);
+            let id = getUniqueId(baseId);
+            const group = {
+              id,
+              type: 'group',
+              name: item.name || '',
+              icon: item.icon || '',
+              apps: []
+            };
+            importItems(item.apps, group.apps);
+            targetArr.push(group);
+          } else if (item) {
+            let baseId = item.id && typeof item.id === 'string' ? item.id : makeItemId(item.alt_app_name && item.alt_app_name.trim() ? item.alt_app_name : item.name);
+            let id = getUniqueId(baseId);
+            targetArr.push({ id, ...item });
+          }
+        });
+      }
+      importItems(data.items, state.items);
+
+      // Update metadata and settings
+      if (data.metadata) Object.assign(state.metadata, data.metadata);
+      if (data.description) state.metadata.description = data.description;
+      if (data.organization) state.metadata.organization = data.organization;
+      if (data.contact) state.metadata.contact = data.contact;
+      if (data.global_settings) Object.assign(state.global_settings, data.global_settings);
+      if (data.swift_dialog_settings) Object.assign(state.swift_dialog_settings, data.swift_dialog_settings);
+      updateItemIndexes();
+    }
+
+    function loadExampleData() {
+      // Always include SwiftDialog as first prerequisite. Demoes:
+      //   - `;`-separated fallback URLs (primary GitHub release → blob fallback)
+      //   - detect_all: true with two AND-ed checks (binary present + build floor)
+      state.prerequisites = [
+        {
+          id: makeItemId("SwiftDialog"),
+          type: "installation",
+          name: "SwiftDialog",
+          download_url: "https://github.com/swiftDialog/swiftDialog/releases/download/v3.1.0/dialog-3.1.0-4994.pkg;https://your-storage.example.com/dialog-3.1.0-4994.pkg",
+          detection_commands: [
+            "root:[ -x /usr/local/bin/dialog ]",
+            "root:[ \"$(/usr/local/bin/dialog --version 2>/dev/null | grep -oE '[0-9]+' | tail -1)\" -ge 4994 ]"
+          ],
+          detect_all: true,
+          retries: 3,
+          timeout: 600
+        },
+        {
+          id: makeItemId("Rosetta 2"),
+          type: "config",
+          name: "Rosetta 2",
+          post_install_commands: ["root:install_rosetta2"],
+          detection_commands: ["root:pgrep oahd >/dev/null 2>&1"],
+          retries: 1,
+          timeout: 120
+        },
+        {
+          id: makeItemId("aria2c"),
+          type: "installation",
+          name: "aria2c",
+          download_url: "https://github.com/SuperDOS/macos-otk/blob/main/utils/aria2-1.37.pkg",
+          detection_commands: ["root:command -v aria2c"],
+          retries: 2,
+          timeout: 300
+        }
+      ];
+
+      state.items = [
+        {
+          // Demoes `download_options: use-curl` — Microsoft fwlink/redirect URLs
+          // benefit from curl's redirect handling over aria2c.
+          id: makeItemId("Company Portal"),
+          index: 0,
+          type: "installation",
+          name: "Company Portal",
+          icon: "companyportal.png",
+          download_url: "https://go.microsoft.com/fwlink/?linkid=853070",
+          download_options: "use-curl",
+          retries: 3,
+          timeout: 600
+        },
+        {
+          // Demoes: group with subtitle, nested installation app with
+          // detect_all: true (both Word AND Excel must be present),
+          // pre_install_commands, and item-level kill_apps.
+          id: makeItemId("Microsoft Office Suite"),
+          index: 1,
+          type: "group",
+          name: "Microsoft Office Suite",
+          subtitle: "Word, Excel, PowerPoint, Outlook",
+          icon: "office-suite.png",
+          apps: [
+            {
+              id: makeItemId("Microsoft Office"),
+              index: 2,
+              type: "installation",
+              name: "Microsoft Office",
+              alt_app_name: "Microsoft Word.app",
+              icon: "office.png",
+              download_url: "https://go.microsoft.com/fwlink/?linkid=2009112",
+              download_options: "use-curl",
+              retries: 3,
+              timeout: 900,
+              detection_commands: [
+                "root:[ -d '/Applications/Microsoft Word.app' ]",
+                "root:[ -d '/Applications/Microsoft Excel.app' ]"
+              ],
+              detect_all: true,
+              kill_apps: ["Microsoft Word", "Microsoft Excel", "Microsoft PowerPoint", "Microsoft Outlook"],
+              pre_install_commands: [
+                "root:rm -rf /tmp/com.microsoft.office.installer.log"
+              ],
+              post_install_commands: [
+                "user:defaults write com.microsoft.office OfficeAutoSignIn -bool true"
+              ]
+            }
+          ]
+        },
+        {
+          id: makeItemId("Security Settings"),
+          index: 3,
+          type: "config",
+          name: "Security Settings",
+          post_install_commands: [
+            "root:defaults write /Library/Preferences/com.apple.alf globalstate -int 1",
+            "root:defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticCheckEnabled -bool true"
+          ]
+        },
+        {
+          id: makeItemId("Update Dock"),
+          index: 4,
+          type: "config",
+          name: "Update Dock",
+          icon: "settings.png",
+          post_install_commands: [
+            "user:configure_dock $dock_items"
+          ],
+          custom_variables: {
+            dock_items: [
+              "/System/Applications/Launchpad.app",
+              "/Applications/Microsoft Edge.app",
+              "/Applications/Microsoft Outlook.app",
+              "/Applications/Microsoft Teams.app",
+              "/Applications/Microsoft 365 Copilot.app",
+              "/System/Applications/Notes.app",
+              "/System/Applications/Messages.app",
+              "/System/Applications/Photos.app",
+              "/System/Applications/App Store.app",
+              "/System/Applications/System Settings.app",
+              "dir-Downloads:created:stack:fan",
+              "dir-Applications:name:folder:grid"
+            ]
+          }
+        },
+        {
+          // Multi-URL fallback: `;`-separated download_url tries each in order
+          // (primary vendor URL → your own mirror). alt_app_name covers bundles
+          // whose .app name differs from the display name.
+          id: makeItemId("Logi Options+"),
+          index: 6,
+          type: "installation",
+          name: "Logi Options+",
+          alt_app_name: "logioptionsplus.app",
+          icon: "logioptions.png",
+          download_url: "https://download01.logi.com/web/ftp/pub/techsupport/optionsplus/logioptionsplus_installer.zip;https://your-storage.example.com/logioptionsplus_installer.zip",
+          installer_name: "logioptionsplus_installer",
+          post_install_commands: [
+            "root:$INSTALLER_PATH --quiet --analytics No --flow No --sso No"
+          ],
+          retries: 3,
+          timeout: 300
+        },
+        {
+          // download_path overrides the saved filename when the source URL is
+          // awkward (URL-encoded, custom-design pkg). Assignment id is a
+          // placeholder — replace with your TeamViewer console value.
+          id: makeItemId("TeamViewer Host"),
+          index: 7,
+          type: "installation",
+          name: "TeamViewer Host",
+          alt_app_name: "TeamViewerHost.app",
+          icon: "teamviewer.png",
+          download_url: "https://dl.teamviewer.com/download/version_15x/Install%20TeamViewerHost.pkg",
+          download_path: "TeamViewerHost.pkg",
+          post_install_commands: [
+            "root:sleep 60",
+            "root:/Applications/TeamViewerHost.app/Contents/Helpers/TeamViewer_Assignment -assignment_id $ASSIGNMENT_ID"
+          ],
+          custom_variables: {
+            ASSIGNMENT_ID: "123456789abcdef0123456789abcdef" // replace with your actual assignment ID from the TeamViewer Management Console
+          },
+          retries: 3,
+          timeout: 600
+        },
+        {
+          // File-drop config: type=config with download_url + download_path
+          // lands a file at a fixed filesystem location (no install step), then
+          // a user-context osascript applies it. Same pattern works for fonts,
+          // branding assets, etc.
+          id: makeItemId("Wallpaper"),
+          index: 8,
+          type: "config",
+          name: "Wallpaper",
+          icon: "settings.png",
+          download_url: "https://your-storage.example.com/branding/bg.jpg",
+          download_path: "/Users/Shared/company/bg.jpg",
+          detection_commands: ["root:[ -f /Users/Shared/company/bg.jpg ]"],
+          detect_all: false,
+          retries: 3,
+          timeout: 30,
+          post_install_commands: [
+            "user:osascript -e 'tell application \"Finder\" to set desktop picture to POSIX file \"/Users/Shared/company/bg.jpg\"'"
+          ]
+        },
+        // ----------------------------------------------------------------------
+        // Reference patterns — tour of the built-in helpers from
+        // functions/custom-commands.sh. Safe to delete in your own deployment.
+        // ----------------------------------------------------------------------
+        {
+          id: makeItemId("Reference patterns"),
+          index: 9,
+          type: "group",
+          name: "Reference patterns",
+          subtitle: "Tour of built-in helpers — delete or adapt as needed",
+          apps: [
+            {
+              // rename_device with token templates ({prefix}, {serialnum}, {country},
+              // {modelcode}, {random[N]}). Detected by ComputerName already matching.
+              id: makeItemId("Rename device"),
+              index: 10,
+              type: "config",
+              name: "Rename device",
+              custom_variables: {
+                name_template: "mac-{serialnum}"
+              },
+              detection_commands: [
+                "root:scutil --get ComputerName 2>/dev/null | grep -q '^mac-'"
+              ],
+              post_install_commands: [
+                "root:rename_device --nametemplate $name_template"
+              ],
+              retries: 1,
+              timeout: 60
+            },
+            {
+              // set_browser_default works for any Chromium-based browser. Edge here.
+              id: makeItemId("Default browser: Edge"),
+              index: 11,
+              type: "config",
+              name: "Default browser: Edge",
+              detection_commands: [
+                "user:defaults read com.apple.LaunchServices/com.apple.launchservices.secure LSHandlers 2>/dev/null | grep -A1 'LSHandlerURLScheme = https' | grep -q 'com.microsoft.edgemac'"
+              ],
+              post_install_commands: [
+                "user:set_browser_default \"Microsoft Edge\""
+              ],
+              retries: 1,
+              timeout: 60
+            },
+            {
+              // set_login_item — add OneDrive to the user's Login Items.
+              id: makeItemId("Login item: OneDrive"),
+              index: 13,
+              type: "config",
+              name: "Login item: OneDrive",
+              detection_commands: [
+                "user:osascript -e 'tell application \"System Events\" to get the name of every login item' | grep -q OneDrive"
+              ],
+              post_install_commands: [
+                "user:set_login_item /Applications/OneDrive.app"
+              ],
+              retries: 1,
+              timeout: 60
+            },
+            {
+              // set_default_locale sets locale + 24-hour clock at both scopes.
+              id: makeItemId("Locale: en_GB"),
+              index: 14,
+              type: "config",
+              name: "Locale: en_GB",
+              detection_commands: [
+                "root:defaults read /Library/Preferences/.GlobalPreferences AppleLocale 2>/dev/null | grep -q en_GB"
+              ],
+              post_install_commands: [
+                "root:set_default_locale en_GB"
+              ],
+              retries: 1,
+              timeout: 60
+            },
+            {
+              // show_action_dialog prompts the console user and auto-closes.
+              // No detection — runs every onboarding pass; rely on auto-close.
+              id: makeItemId("Prompt: enable Screen Recording"),
+              index: 15,
+              type: "config",
+              name: "Prompt: enable Screen Recording",
+              post_install_commands: [
+                "user:show_action_dialog --title 'Action required' --message 'Toggle on **Screen Recording** for these apps.\\n\\n- Microsoft Edge\\n- Microsoft Teams\\n\\nClick **Done** when finished.' --timer 600"
+              ],
+              retries: 1,
+              timeout: 660
+            }
+          ]
+        }
+      ];
+
+      // Add some example global kill apps
+      state.global_settings.kill_apps_pre = ["Safari", "Google Chrome"];
+      state.global_settings.kill_apps_post = ["Microsoft Teams", "Slack"];
+
+      render();
+      snackbar('info', '📚 Example data loaded successfully!', 1500, false);
+    }
+
+    // ---- Event Listeners ---------------------------------------------------
+    $('btn-add-item').onclick = () => openItemEditor(null, '', false);
+    $('btn-add-group').onclick = () => openGroupEditor(null);
+    $('btn-global-settings').onclick = () => openGlobalSettingsModal();
+    $('btn-dialog-settings').onclick = () => openDialogSettingsModal();
+    $('btn-copy-json').onclick = () => copyJSON();
+    $('btn-download').onclick = () => downloadJSON();
+    $('btn-load-json').onclick = () => $('file-load').click();
+    $('btn-load-example').onclick = () => loadExampleData();
+    $('btn-clear-all').onclick = () => {
+      // Reset state to defaults but keep SwiftDialog prerequisite
+      Object.assign(state, JSON.parse(JSON.stringify(defaultState)));
+      state.prerequisites = [
+        {
+          id: makeUniqueId(makeItemId("SwiftDialog")),
+          type: "installation",
+          name: "SwiftDialog",
+          download_url: SWIFTDIALOG_INSTALLER_URL,
+          detection_commands: ["root:[ -x /usr/local/bin/dialog ] && [ \"$(/usr/local/bin/dialog --version 2>/dev/null | grep -oE '[0-9]+' | tail -1)\" -ge 4994 ]"],
+          retries: 3,
+          timeout: 600
+        }
+      ];
+      render();
+      snackbar('info', '🧹 State cleared – reverted to defaults!', 1500, false)
+    };
+
+    // Group editor save
+    $('group-save').onclick = () => {
+      const name = $('group-name').value.trim();
+      let id = $('group-id').value.trim();
+      let oldName = '';
+      let oldId = id;
+
+      // If editing, get the old name
+      const found = id ? findItemById(id) : null;
+      if (found) oldName = found.item.name;
+
+      // If name changed or id is missing, generate a new unique id
+      if (!id || (oldName && name !== oldName)) {
+        const baseId = makeItemId(name);
+        id = makeUniqueId(baseId);
+      }
+
+      // Validate name
+      if (!name) {
+        snackbar('error', '❌ Group name is required!', 2000, false);
+        return;
+      }
+
+
+      const group = {
+        id,
+        type: 'group',
+        name: name,
+        icon: $('group-icon').value.trim(),
+        subtitle: $('group-subtitle').value.trim(),
+        apps: []
+      };
+
+      if (found) {
+        // If id changed, update references
+        if (id !== oldId) {
+          // Remove old group and add new one with new id
+          found.container.splice(found.index, 1, group);
+          group.apps = found.item.apps || [];
+        } else {
+          Object.assign(found.item, group);
+          group.apps = found.item.apps || [];
+        }
+      } else {
+        state.items.push(group);
+      }
+
+      ui('#group-modal');
+      render();
+      snackbar('info', '✅ Group saved successfully!', 1500, false);
+
+    };
+
+    // Item editor save
+    $('item-save').onclick = () => {
+      const name = $('item-name').value.trim();
+      let id = $('item-id').value.trim();
+
+      let oldName = '';
+      let oldAltAppName = '';
+      let oldId = id;
+
+      // Check if editing existing item/prereq
+      let found = id ? findItemById(id) : null;
+      let foundPrereq = id ? findPrereqById(id) : null;
+      if (found) {
+        oldName = found.item.name;
+        oldAltAppName = found.item.alt_app_name || '';
+      }
+      if (foundPrereq) {
+        oldName = foundPrereq.item.name;
+        oldAltAppName = foundPrereq.item.alt_app_name || '';
+      }
+
+      const altAppName = $('item-alt_app_name')?.value?.trim();
+
+      // If id is missing, or name changed, or alt_app_name changed, regenerate id.
+      // The id is load-bearing — the bash orchestrator uses it as the SwiftDialog
+      // row identifier and as the plist filename ($STATE_DIR/<id>.plist), so a
+      // missing or duplicated id silently breaks inspect mode for that row.
+      // Surface a snackbar so the user knows what id ended up on the item.
+      let idWasAutoGenerated = false;
+      const isNewItem = !oldId;
+      if (
+        !id ||
+        (oldName && name !== oldName) ||
+        (oldAltAppName !== (altAppName || ''))
+      ) {
+        const baseId = makeItemId(altAppName ? altAppName : name);
+        id = makeUniqueId(baseId);
+        idWasAutoGenerated = true;
+      }
+
+
+      const isPrereq = $('item-is-prereq').checked;
+
+      // Validate name
+      if (!name) {
+        snackbar('error', '❌ Item name is required!', 2000, false);
+        return;
+      }
+
+
+      const item = readItemFromForm(id, (found && found.item) || (foundPrereq && foundPrereq.item) || null);
+
+      if (isPrereq) {
+        // Move to prerequisites if it exists elsewhere
+        if (foundPrereq) {
+          if (id !== oldId) {
+            // Remove old and add new with new id
+            foundPrereq.container.splice(foundPrereq.index, 1, item);
+          } else {
+            Object.assign(foundPrereq.item, item);
+          }
+        } else {
+          removeItemFromRegularListsById(id);
+          state.prerequisites.push(item);
+        }
+      } else {
+        // Move to regular items if it exists in prerequisites
+        const parentGroupId = $('parent-group-id').value;
+        if (foundPrereq) {
+          removeItemFromPrereqsById(id);
+        }
+
+        if (found) {
+          if (id !== oldId) {
+            found.container.splice(found.index, 1, item);
+          } else {
+            Object.assign(found.item, item);
+          }
+        } else {
+          if (parentGroupId) {
+            const group = findItemById(parentGroupId).item;
+            group.apps = group.apps || [];
+            group.apps.push(item);
+          } else {
+            state.items.push(item);
+          }
+        }
+      }
+
+      ui('#item-modal');
+      render();
+      if (idWasAutoGenerated) {
+        const verb = isNewItem ? 'assigned' : 'regenerated';
+        snackbar('warning', `⚠️ ID ${verb}: \`${id}\` — verify it is unique`, 2800, false);
+      } else {
+        snackbar('info', '✅ Item saved successfully!', 1500, false);
+      }
+    };
+
+
+    // Type change handler
+    $('item-type').addEventListener('change', (e) => {
+      toggleInstallationFields(e.target.value);
+    });
+
+    // Prerequisite toggle handler
+    $('item-is-prereq').addEventListener('change', (e) => {
+      togglePrereqFields(e.target.checked);
+    });
+
+    // File loader
+    $('file-load').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          fromImportedJSON(data);
+          render();
+          // Freshly loaded from disk — in-memory matches file, so not dirty.
+          clearDirty();
+          snackbar('info', '✅ Configuration loaded successfully!', 1500, false);
+        } catch (error) {
+          snackbar('error', `❌ Failed to parse JSON: ${error.message}`, 1500, false);
+        } finally {
+          e.target.value = '';
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // Allow Enter key for global kill apps
+    $('new-global-kill-app-pre').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        addGlobalKillApp('pre');
+      }
+    });
+
+    $('new-global-kill-app-post').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        addGlobalKillApp('post');
+      }
+    });
+
+    // Initialize the application
+    document.addEventListener('DOMContentLoaded', () => {
+      // Always reset to clean default state
+      Object.assign(state, JSON.parse(JSON.stringify(defaultState)));
+      // Always ensure SwiftDialog is in prerequisites on startup
+      if (!state.prerequisites.some(item => item.name === 'SwiftDialog')) {
+        state.prerequisites.unshift({
+          id: makeUniqueId(makeItemId("SwiftDialog")),
+          type: "installation",
+          name: "SwiftDialog",
+          download_url: SWIFTDIALOG_INSTALLER_URL,
+          detection_commands: ["root:[ -x /usr/local/bin/dialog ] && [ \"$(/usr/local/bin/dialog --version 2>/dev/null | grep -oE '[0-9]+' | tail -1)\" -ge 4994 ]"],
+          retries: 3,
+          timeout: 600
+        });
+      }
+      render();
+      updateJSONView();
+      // Enable dirty tracking only after the first render so the bootstrap
+      // state assignment and default SwiftDialog injection do not mark the
+      // page dirty before the user has touched anything.
+      dirtyTrackingEnabled = true;
+    });
+
+
+    // Auto-save functionality (without localStorage)
+    let autoSaveTimer;
+    function scheduleAutoSave() {
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(() => {
+        // Auto-save functionality can be implemented here if needed
+        // For now, we'll just update the JSON view
+        updateJSONView();
+      }, 2000);
+    }
+
+    // Override updateJSONView to trigger auto-save AND track the dirty flag.
+    // updateJSONView is called from every state mutation in the app, so it is
+    // the natural choke-point for "user changed something since last save".
+    let isDirty = false;
+    let dirtyTrackingEnabled = false; // flipped to true after initial render
+    const originalUpdateJSON = updateJSONView;
+    updateJSONView = function () {
+      originalUpdateJSON();
+      scheduleAutoSave();
+      if (dirtyTrackingEnabled) isDirty = true;
+    };
+
+    function clearDirty() {
+      isDirty = false;
+    }
+
+    // Prompt before the tab is closed if there are unsaved edits. The browser
+    // ignores our message text (most modern browsers show their own generic
+    // dialog), but returning a non-empty string is what triggers it.
+    window.addEventListener('beforeunload', (e) => {
+      if (!isDirty) return;
+      e.preventDefault();
+      e.returnValue = ''; // legacy browsers
+      return '';
+    });
+
+    function snackbar(type, msg, milliseconds = 3000, top = false, additionalClass = "") {
+      document.querySelectorAll(".snackbar").forEach(snack => {
+        let iconElement = snack.querySelector("i");
+        let messageElement = snack.querySelector("span");
+
+        if (!iconElement) {
+          iconElement = document.createElement("i");
+          snack.appendChild(iconElement);
+        }
+        if (!messageElement) {
+          messageElement = document.createElement("span");
+          snack.appendChild(messageElement);
+        }
+
+        iconElement.textContent = type;
+        messageElement.textContent = msg;
+
+        snack.className = "snackbar";
+        if (top) snack.classList.add("top");
+        if (additionalClass) snack.classList.add(additionalClass);
+
+        ui(".snackbar", milliseconds);
+      });
+    }
+  </script>
+
+  <div class="snackbar" id="snackbar">
+    <i>info</i>
+    <span>message</span>
+  </div>
+</body>
+
+</html>

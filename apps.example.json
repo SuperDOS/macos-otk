@@ -1,0 +1,167 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "created": "2026-07-17",
+    "organization": "Example Org",
+    "contact": "it-support@example.org"
+  },
+  "global_settings": {
+    "version": "1.0",
+    "default_retries": 2,
+    "default_dl_timeout": 300,
+    "kill_apps_pre": [],
+    "kill_apps_post": ["Installer"]
+  },
+  "swift_dialog_settings": {
+    "title": "macOS Onboarding",
+    "message": "Please wait while we configure your Mac. This can take a while depending on your connection.",
+    "icon": "company-logo.png",
+    "bannerimage": "banner.png",
+    "preset": "preset1",
+    "appearance": "dark",
+    "blurscreen": true,
+    "ontop": true,
+    "moveable": true,
+    "fullscreen": false,
+    "width": 1024,
+    "height": 650,
+    "button1text": "Please Wait...",
+    "primary_button_action": "reboot"
+  },
+  "prerequisites": [
+    {
+      "id": "rosetta2",
+      "type": "config",
+      "name": "Rosetta 2",
+      "detection_commands": ["root:pgrep oahd >/dev/null 2>&1"],
+      "post_install_commands": ["root:install_rosetta2"],
+      "retries": 1,
+      "timeout": 120
+    },
+    {
+      "id": "aria2c",
+      "type": "installation",
+      "name": "aria2c",
+      "download_url": "https://YOUR_HOST/aria2-1.37.pkg",
+      "detection_commands": "root:command -v aria2c",
+      "retries": 2,
+      "timeout": 300
+    },
+    {
+      "id": "swiftdialog",
+      "type": "installation",
+      "name": "SwiftDialog",
+      "download_url": "https://github.com/swiftDialog/swiftDialog/releases/download/v3.1.0/dialog-3.1.0-4994.pkg",
+      "detection_commands": "root:[ -x /usr/local/bin/dialog ] && [ \"$(/usr/local/bin/dialog --version 2>/dev/null | grep -oE '[0-9]+' | tail -1)\" -ge 4994 ]",
+      "retries": 3,
+      "timeout": 600
+    },
+    {
+      "id": "utiluti",
+      "type": "installation",
+      "name": "utiluti",
+      "download_url": "https://github.com/scriptingosx/utiluti/releases/download/v1.5/utiluti-1.5.pkg",
+      "detection_commands": "root:command -v utiluti",
+      "retries": 2,
+      "timeout": 300
+    }
+  ],
+  "items": [
+    {
+      "id": "companyportal",
+      "type": "installation",
+      "name": "Company Portal",
+      "icon": "companyportal.png",
+      "download_url": "https://go.microsoft.com/fwlink/?linkid=853070",
+      "retries": 3,
+      "timeout": 600,
+      "index": 0
+    },
+    {
+      "id": "microsoftedge",
+      "type": "installation",
+      "name": "Microsoft Edge",
+      "icon": "edge.png",
+      "download_url": "https://go.microsoft.com/fwlink/?linkid=2093504;https://YOUR_HOST/mirrors/edge.pkg",
+      "detection_commands": ["root:[ -d '/Applications/Microsoft Edge.app' ]"],
+      "kill_apps": ["Safari"],
+      "post_install_commands": ["user:set_browser_default \"Microsoft Edge\""],
+      "retries": 3,
+      "timeout": 600,
+      "index": 1
+    },
+    {
+      "id": "logioptionsplus",
+      "type": "installation",
+      "name": "Logi Options+",
+      "alt_app_name": "logioptionsplus.app",
+      "icon": "logioptions.png",
+      "download_url": "https://download01.logi.com/web/ftp/pub/techsupport/optionsplus/logioptionsplus_installer.zip",
+      "installer_name": "logioptionsplus_installer",
+      "post_install_commands": [
+        "root:$INSTALLER_PATH --quiet --analytics No --flow No --sso No"
+      ],
+      "retries": 3,
+      "timeout": 300,
+      "index": 2
+    },
+    {
+      "id": "licensedapp",
+      "type": "installation",
+      "name": "Licensed App (custom_variables example)",
+      "icon": "licensedapp.png",
+      "download_url": "https://YOUR_HOST/apps/licensed-app.zip",
+      "detection_commands": ["root:[ -d '/Applications/Licensed App.app' ]"],
+      "post_install_commands": [
+        "root:cd $(dirname $INSTALLER_PATH) && ./$(basename $INSTALLER_PATH) $LICENSE_TOKEN $REGION"
+      ],
+      "custom_variables": {
+        "LICENSE_TOKEN": "REPLACE_WITH_YOUR_TOKEN",
+        "REGION": "eu"
+      },
+      "retries": 2,
+      "timeout": 300,
+      "index": 3
+    },
+    {
+      "type": "group",
+      "id": "systemsettings",
+      "name": "System Settings",
+      "icon": "settings.png",
+      "index": 4,
+      "apps": [
+        {
+          "id": "wallpaper",
+          "type": "config",
+          "name": "Set Wallpaper",
+          "download_url": "https://YOUR_HOST/branding/wallpaper.jpg",
+          "download_path": "/Users/Shared/branding/wallpaper.jpg",
+          "detection_commands": ["root:[ -f /Users/Shared/branding/wallpaper.jpg ]"],
+          "post_install_commands": [
+            "user:osascript -e 'tell application \"System Events\" to set picture of every desktop to \"/Users/Shared/branding/wallpaper.jpg\"'"
+          ]
+        },
+        {
+          "id": "configuredock",
+          "type": "config",
+          "name": "Configure Dock",
+          "detection_commands": ["root:[ -f \"$STATE_DIR/configuredock.plist\" ]"],
+          "post_install_commands": [
+            "user:configure_dock '/Applications/Microsoft Edge.app' '/Applications/Company Portal.app' 'spacer' 'dir-Downloads:created:stack:fan'"
+          ]
+        },
+        {
+          "id": "changecomputername",
+          "type": "config",
+          "name": "Change Computer Name",
+          "detection_commands": [
+            "root:rename_device --nametemplate \"mac-{serialnum}\" --testonly true"
+          ],
+          "post_install_commands": [
+            "root:rename_device --nametemplate \"mac-{serialnum}\""
+          ]
+        }
+      ]
+    }
+  ]
+}

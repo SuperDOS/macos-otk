@@ -16,7 +16,7 @@
 - **Live progress UI** via [SwiftDialog](https://github.com/swiftDialog/swiftDialog) inspect mode, driven by real verified state.
 - **Secure by option:** [sign your config](#config-signing) and devices refuse to execute anything you didn't sign.
 
-**Get started:** host three files (`apps.json`, `onboardingtoolkit.zip`, `icons.zip`) on any HTTPS storage, paste your URLs (and signing key) into the installer script, and deploy it via Intune - or run it manually with `sudo`. Full walkthrough in [Quick start](#quick-start).
+**Get started:** host three files on any HTTPS storage, point the installer script at them, deploy via Intune - the whole path is [9 numbered steps](#the-short-version---first-deployment-in-9-steps).
 
 ---
 
@@ -31,6 +31,7 @@
     - [A layered detection engine](#a-layered-detection-engine)
     - [A visual config builder](#a-visual-config-builder)
   - [Quick start](#quick-start)
+    - [The short version - first deployment in 9 steps](#the-short-version---first-deployment-in-9-steps)
     - [Prepare your hosting](#prepare-your-hosting)
     - [Pick an installer](#pick-an-installer)
     - [Option A - Microsoft Intune (recommended)](#option-a---microsoft-intune-recommended)
@@ -123,6 +124,22 @@ The entire deployment is one `apps.json` - no variables to edit inside scripts. 
 ---
 
 ## Quick start
+
+### The short version - first deployment in 9 steps
+
+Everything below is explained in depth later; this is the minimum path from zero to an onboarded test Mac via Intune.
+
+1. **Get the toolkit** - clone or download this repo.
+2. **Build your config** - open `json-builder/macos-deployment-builder.html` in a browser, click **Load Example Data** (or **Load** and paste [`apps.example.json`](apps.example.json)), edit your apps, then **Download** as `apps.json`.
+3. **Zip the runtime** - from the repo root: `zip -r onboardingtoolkit.zip onboardingProcess.sh functions/` (the two must sit at the zip root, no wrapping folder).
+4. **Zip your icons** - every PNG your config references, in one **flat** `icons.zip`.
+5. **Upload all three** (`apps.json`, `onboardingtoolkit.zip`, `icons.zip`) to any HTTPS host your Macs can reach (Azure Blob, S3, a web server) and note the three URLs.
+6. **Point the installer at them** - edit the three `ONBOARDING_*_URL` values at the top of `otk-intune-onboarding.sh`. → [details](#prepare-your-hosting)
+7. **Sign your config** *(recommended - one command)* - `./otk-sign.sh --init` creates keys and wires the public key into the installer automatically; then `./otk-sign.sh` and upload the two `.sig` files next to the artifacts. (Skipping this works too - devices just log a warning.) → [details](#config-signing)
+8. **Handle PPPC** - if your onboarding uses AppleScript steps (wallpaper, default browser), deploy a PPPC profile ([`pppc-example.mobileconfig`](pppc-example.mobileconfig) is ready to adapt) and set its name in the script; otherwise empty the two PPPC constants to skip the gate. → [details](#the-pppc-gate-configure-or-disable-before-deploying)
+9. **Deploy via Intune** - upload `otk-intune-onboarding.sh` as a macOS shell script (run as root, no arguments), assign it with a **run frequency** (e.g. daily), and enroll a test Mac. Watch progress in the SwiftDialog UI or in `/Library/Application Support/Microsoft/IntuneScripts/logs/`.
+
+Config updates later are even shorter: edit `apps.json` → bump `global_settings.version` → re-sign → upload. The fleet picks it up on the next scheduled run. → [details](#versioning--auto-updates)
 
 ### Prepare your hosting
 
@@ -283,6 +300,10 @@ readonly PPPC_PROFILE_IDENTIFIERS=( "..." )        # and/or explicit payload ide
 ```
 
 The check passes when *either* matches (name matching survives Intune's UUID rotation on profile edits). **No PPPC profile in your org?** Empty both (`""` and `()`) and the gate is skipped with a logged warning - just know that user-context AppleScript steps may then need TCC consent by other means.
+
+`otk-install.sh` carries the same two constants for the same reason - **they default to empty (gate skipped)** there, which is right for manual and daemon deployments. If you deploy `otk-install.sh` through Intune instead of the slim script, configure them the same way.
+
+**Don't have a PPPC profile yet?** Start from [`pppc-example.mobileconfig`](pppc-example.mobileconfig) in this repo - it pre-approves exactly the TCC permissions OTK's AppleScript steps need (Accessibility + AppleEvents for the Intune MDM agent, `/bin/bash`, `osascript`, System Events, and Terminal for debug runs, toward Finder / System Events / System Settings / SystemUIServer). The header comment walks through the four steps: generate fresh UUIDs, set your org naming, upload as a **Custom** template profile in Intune assigned to the same device group as the script, and point `PPPC_PROFILE_NAME_MATCH` / `PPPC_PROFILE_IDENTIFIERS` at it.
 
 ### `onboardingProcess.sh` - orchestrator
 

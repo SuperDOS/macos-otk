@@ -679,6 +679,8 @@
               {modelcode} {random[N]}</div>
             <div><code>set_browser_default "Microsoft Edge"</code> — Chromium browsers only (Edge / Chrome / Brave /
               etc.)</div>
+            <div><code>set_default_mail_client com.microsoft.outlook</code> — takes a bundle id; claims mail-client,
+              .ics, vCard, mailto and ical handlers</div>
             <div><code>set_login_item /Applications/OneDrive.app</code> |
               <code>set_login_item --remove /Applications/Foo.app</code>
             </div>
@@ -2065,12 +2067,60 @@
       }
     ];
 
-    function attachHelperPicker(selectId, inputId) {
+    // Detection commands are a different vocabulary: they must be side-effect
+    // free and communicate via exit code, so the install-side helpers above
+    // are wrong here. These are the idioms actually used across apps.json.
+    // rename_device is the one custom command that belongs in both lists -
+    // `--testonly true` is its documented detection mode (custom-commands.sh).
+    const DETECTION_HELPERS = [
+      {
+        label: 'app bundle present',
+        template: "root:[ -d '/Applications/App.app' ]"
+      },
+      {
+        label: 'flag file present',
+        template: 'root:[ -f /Users/Shared/company/step.done ]'
+      },
+      {
+        label: 'binary on PATH',
+        template: 'root:command -v <binary>'
+      },
+      {
+        label: 'process running',
+        template: 'root:pgrep <process> >/dev/null 2>&1'
+      },
+      {
+        label: 'binary present at or above version',
+        template: 'root:[ -x /usr/local/bin/<binary> ] && [ "$(/usr/local/bin/<binary> --version 2>/dev/null | grep -oE \'[0-9]+\' | tail -1)" -ge 0 ]'
+      },
+      {
+        label: 'defaults key equals value',
+        template: 'user:[ "$(defaults read <domain> <key> 2>/dev/null)" = "1" ]'
+      },
+      {
+        label: 'rename_device --testonly (needs rename?)',
+        template: 'root:rename_device --nametemplate "mac-{serialnum}" --testonly true'
+      },
+      {
+        label: 'app is the default handler (LaunchServices)',
+        template: 'user:[ "$(plutil -convert json -o - ~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist | jq \'[.LSHandlers[] | select(.LSHandlerRoleAll == "com.microsoft.outlook")] | length >= 1\')" = "true" ]'
+      },
+      {
+        label: 'app is a login item',
+        template: 'user:[ "$(osascript -e \'tell application "System Events" to ((path of every login item) contains "/Applications/OneDrive.app")\' 2>/dev/null)" = "true" ]'
+      }
+    ];
+
+    // `helpers` defaults to the install-side list; the detection picker passes
+    // DETECTION_HELPERS instead.
+    function attachHelperPicker(selectId, inputId, helpers = COMMAND_HELPERS) {
       const sel = $(selectId);
       const inp = $(inputId);
       if (!sel || !inp) return;
+      // Labels and templates both go through esc(): the <placeholder> style
+      // args are swallowed by the HTML parser as unknown tags otherwise.
       sel.innerHTML = '<option value="">— pick a helper to insert —</option>' +
-        COMMAND_HELPERS.map(h => `<option value="${h.template.replace(/"/g, '&quot;')}">${h.label}</option>`).join('');
+        helpers.map(h => `<option value="${esc(h.template)}">${esc(h.label)}</option>`).join('');
       sel.addEventListener('change', () => {
         if (sel.value) {
           inp.value = sel.value;
@@ -2082,7 +2132,7 @@
     }
     attachHelperPicker('le-item-pre-helper', 'le-item-pre-input');
     attachHelperPicker('le-item-post-helper', 'le-item-post-input');
-    attachHelperPicker('le-item-detect-helper', 'le-item-detect-input');
+    attachHelperPicker('le-item-detect-helper', 'le-item-detect-input', DETECTION_HELPERS);
 
     function openItemEditor(item, parentGroupId, isPrereq = false) {
       const defaultItem = {
@@ -2529,7 +2579,7 @@
           id: makeItemId("aria2c"),
           type: "installation",
           name: "aria2c",
-          download_url: "https://github.com/SuperDOS/macos-otk/blob/main/utils/aria2-1.37.pkg",
+          download_url: "https://github.com/SuperDOS/macos-otk/raw/main/utils/aria2-1.37.pkg",
           detection_commands: ["root:command -v aria2c"],
           retries: 2,
           timeout: 300

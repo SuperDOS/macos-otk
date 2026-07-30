@@ -680,7 +680,8 @@
             <div><code>set_browser_default "Microsoft Edge"</code> — Chromium browsers only (Edge / Chrome / Brave /
               etc.)</div>
             <div><code>set_default_mail_client com.microsoft.outlook</code> — takes a bundle id; claims mail-client,
-              .ics, vCard, mailto and ical handlers</div>
+              .ics, vCard, mailto and ical handlers. LaunchServices only persists the ones the app declares in its
+              Info.plist, so detect with a required-subset check, never a match count</div>
             <div><code>set_login_item /Applications/OneDrive.app</code> |
               <code>set_login_item --remove /Applications/Foo.app</code>
             </div>
@@ -2102,8 +2103,8 @@
         template: 'root:rename_device --nametemplate "mac-{serialnum}" --testonly true'
       },
       {
-        label: 'app is the default handler (LaunchServices)',
-        template: 'user:[ "$(plutil -convert json -o - ~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist | jq \'[.LSHandlers[] | select(.LSHandlerRoleAll == "com.microsoft.outlook")] | length >= 1\')" = "true" ]'
+        label: 'app owns the required LaunchServices handlers',
+        template: 'user:[ "$(plutil -convert json -o - ~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist | jq \'(["com.apple.default-app.mail-client", "mailto"] - [.LSHandlers[] | select(((.LSHandlerRoleAll // .LSHandlerRoleEditor // .LSHandlerRoleViewer // "") | ascii_downcase) == "com.microsoft.outlook") | (.LSHandlerContentType // .LSHandlerURLScheme)]) | length == 0\')" = "true" ]'
       },
       {
         label: 'app is a login item',
@@ -2765,15 +2766,41 @@
             },
             {
               // set_browser_default works for any Chromium-based browser. Edge here.
+              // Detection asserts only the handlers that LaunchServices reliably
+              // persists (default-app.web-browser + http + https) rather than counting
+              // matches — public.html is optional because whether it lands as
+              // LSHandlerRoleAll depends on what the browser claims in its Info.plist.
               id: makeItemId("Default browser: Edge"),
               index: 11,
               type: "config",
               name: "Default browser: Edge",
               detection_commands: [
-                "user:defaults read com.apple.LaunchServices/com.apple.launchservices.secure LSHandlers 2>/dev/null | grep -A1 'LSHandlerURLScheme = https' | grep -q 'com.microsoft.edgemac'"
+                "user:[ \"$(plutil -convert json -o - ~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist | jq '([\"com.apple.default-app.web-browser\", \"http\", \"https\"] - [.LSHandlers[] | select(((.LSHandlerRoleAll // .LSHandlerRoleEditor // .LSHandlerRoleViewer // \"\") | ascii_downcase) == \"com.microsoft.edgemac\") | (.LSHandlerContentType // .LSHandlerURLScheme)]) | length == 0')\" = \"true\" ]"
               ],
               post_install_commands: [
                 "user:set_browser_default \"Microsoft Edge\""
+              ],
+              retries: 1,
+              timeout: 60
+            },
+            {
+              // set_default_mail_client asks for 5 bindings, but LaunchServices only
+              // persists the ones the app actually claims — never count matches here,
+              // assert the required subset instead (see the Edge item above).
+              id: makeItemId("Default mail client: Outlook"),
+              index: 12,
+              type: "config",
+              name: "Default mail client: Outlook",
+              detection_commands: [
+                "user:[ \"$(plutil -convert json -o - ~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist | jq '([\"com.apple.default-app.mail-client\", \"mailto\"] - [.LSHandlers[] | select(((.LSHandlerRoleAll // .LSHandlerRoleEditor // .LSHandlerRoleViewer // \"\") | ascii_downcase) == \"com.microsoft.outlook\") | (.LSHandlerContentType // .LSHandlerURLScheme)]) | length == 0')\" = \"true\" ]"
+              ],
+              kill_apps: [
+                "Microsoft Outlook",
+                "Mail",
+                "Calendar"
+              ],
+              post_install_commands: [
+                "user:set_default_mail_client com.microsoft.outlook"
               ],
               retries: 1,
               timeout: 60

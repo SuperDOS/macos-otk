@@ -3,12 +3,29 @@
 <!--
   PPPC profile for the macOS Onboarding Toolkit (OTK).
 
-  Pre-approves the TCC permissions OTK's AppleScript-driven steps need
-  (wallpaper, default-browser auto-click, notification clearing) so they run
-  headless without invisible consent prompts. Grants cover the whole
-  execution chain (Intune MDM agent, /bin/bash, osascript, System Events,
-  Terminal for manual/debug runs) because macOS attributes TCC
-  responsibility inconsistently between them.
+  Pre-approves the Accessibility and Apple Events permissions OTK's
+  AppleScript-driven steps need (wallpaper, default-browser auto-click,
+  Notification Center clear, end-of-run restart) so they run headless without
+  invisible consent prompts.
+
+  Grants are declared for the whole execution chain - the Intune MDM agent,
+  /bin/bash, /usr/bin/osascript and Terminal (manual/debug runs) - because
+  macOS attributes TCC responsibility inconsistently between the process that
+  launched the script and the one that actually sends the Apple Event. Each
+  sender is granted toward every receiver the toolkit talks to: Finder
+  (wallpaper), System Events (UI clicks, login items, JXA notification clear),
+  System Settings (screen-recording consent flow) and loginwindow (the
+  end-of-run restart, `«event aevtrrst»`).
+
+  Two details that are easy to get wrong:
+    - /usr/bin/osascript is a bare Mach-O with no bundle, so it MUST be
+      declared with IdentifierType `path`. A `bundleID` entry for
+      com.apple.osascript never matches and the grant silently does nothing.
+    - loginwindow must be listed as an AEReceiver or the reboot at the end of
+      an interactive run hangs on an invisible consent prompt.
+
+  NOT covered: Screen Recording. macOS does not allow MDM to pre-grant it, so
+  the toolkit opens the Screen Recording pane and asks the user instead.
 
   BEFORE UPLOADING TO INTUNE:
     1. Generate two fresh UUIDs (`uuidgen` on macOS, twice) and replace both
@@ -89,7 +106,7 @@
 						<key>CodeRequirement</key>
 						<string>identifier "com.apple.systemevents" and anchor apple</string>
 						<key>Comment</key>
-						<string>System Events - needed to drive UI clicks (e.g. CoreServicesUIAgent default-browser button).</string>
+						<string>System Events - the process that actually drives UI clicks (CoreServicesUIAgent default-browser button, Notification Center clear-all).</string>
 						<key>Identifier</key>
 						<string>com.apple.systemevents</string>
 						<key>IdentifierType</key>
@@ -101,11 +118,11 @@
 						<key>CodeRequirement</key>
 						<string>identifier "com.apple.osascript" and anchor apple</string>
 						<key>Comment</key>
-						<string>osascript - defence-in-depth when TCC attributes the responsible process to the script binary.</string>
+						<string>osascript - defence-in-depth when TCC attributes the responsible process to the script interpreter. Declared by path: /usr/bin/osascript is a bare Mach-O with no bundle, so bundleID never matches.</string>
 						<key>Identifier</key>
-						<string>com.apple.osascript</string>
+						<string>/usr/bin/osascript</string>
 						<key>IdentifierType</key>
-						<string>bundleID</string>
+						<string>path</string>
 					</dict>
 				</array>
 				<key>AppleEvents</key>
@@ -122,7 +139,61 @@
 						<key>CodeRequirement</key>
 						<string>identifier "com.microsoft.intuneMDMAgent" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = UBF8T346G9</string>
 						<key>Comment</key>
-						<string>IntuneMDMAgent to Finder.</string>
+						<string>IntuneMDMAgent to Finder - wallpaper set via `tell Finder to set desktop picture` (apps.json).</string>
+						<key>Identifier</key>
+						<string>com.microsoft.intuneMDMAgent</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.systemevents" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.systemevents</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.microsoft.intuneMDMAgent" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = UBF8T346G9</string>
+						<key>Comment</key>
+						<string>IntuneMDMAgent to System Events - hide-all-apps trick, CoreServicesUIAgent click loop, login items, notification clearing (JXA).</string>
+						<key>Identifier</key>
+						<string>com.microsoft.intuneMDMAgent</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.systempreferences" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.systempreferences</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.microsoft.intuneMDMAgent" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = UBF8T346G9</string>
+						<key>Comment</key>
+						<string>IntuneMDMAgent to System Settings - `tell System Settings to activate / quit` in the screen-recording consent flow (apps.json).</string>
+						<key>Identifier</key>
+						<string>com.microsoft.intuneMDMAgent</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.loginwindow" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.loginwindow</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.microsoft.intuneMDMAgent" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = UBF8T346G9</string>
+						<key>Comment</key>
+						<string>IntuneMDMAgent to loginwindow - end-of-run restart via `«event aevtrrst»` (onboardingProcess.sh:reboot).</string>
 						<key>Identifier</key>
 						<string>com.microsoft.intuneMDMAgent</string>
 						<key>IdentifierType</key>
@@ -138,9 +209,207 @@
 						<key>Allowed</key>
 						<true/>
 						<key>CodeRequirement</key>
+						<string>identifier "com.apple.bash" and anchor apple</string>
+						<key>Comment</key>
+						<string>/bin/bash to Finder - wallpaper set via `tell Finder to set desktop picture` (apps.json).</string>
+						<key>Identifier</key>
+						<string>/bin/bash</string>
+						<key>IdentifierType</key>
+						<string>path</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.systemevents" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.systemevents</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.bash" and anchor apple</string>
+						<key>Comment</key>
+						<string>/bin/bash to System Events - hide-all-apps trick, CoreServicesUIAgent click loop, login items, notification clearing (JXA).</string>
+						<key>Identifier</key>
+						<string>/bin/bash</string>
+						<key>IdentifierType</key>
+						<string>path</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.systempreferences" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.systempreferences</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.bash" and anchor apple</string>
+						<key>Comment</key>
+						<string>/bin/bash to System Settings - `tell System Settings to activate / quit` in the screen-recording consent flow (apps.json).</string>
+						<key>Identifier</key>
+						<string>/bin/bash</string>
+						<key>IdentifierType</key>
+						<string>path</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.loginwindow" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.loginwindow</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.bash" and anchor apple</string>
+						<key>Comment</key>
+						<string>/bin/bash to loginwindow - end-of-run restart via `«event aevtrrst»` (onboardingProcess.sh:reboot).</string>
+						<key>Identifier</key>
+						<string>/bin/bash</string>
+						<key>IdentifierType</key>
+						<string>path</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.finder" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.finder</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.osascript" and anchor apple</string>
+						<key>Comment</key>
+						<string>osascript to Finder - wallpaper set via `tell Finder to set desktop picture` (apps.json).</string>
+						<key>Identifier</key>
+						<string>/usr/bin/osascript</string>
+						<key>IdentifierType</key>
+						<string>path</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.systemevents" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.systemevents</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.osascript" and anchor apple</string>
+						<key>Comment</key>
+						<string>osascript to System Events - hide-all-apps trick, CoreServicesUIAgent click loop, login items, notification clearing (JXA).</string>
+						<key>Identifier</key>
+						<string>/usr/bin/osascript</string>
+						<key>IdentifierType</key>
+						<string>path</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.systempreferences" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.systempreferences</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.osascript" and anchor apple</string>
+						<key>Comment</key>
+						<string>osascript to System Settings - `tell System Settings to activate / quit` in the screen-recording consent flow (apps.json).</string>
+						<key>Identifier</key>
+						<string>/usr/bin/osascript</string>
+						<key>IdentifierType</key>
+						<string>path</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.loginwindow" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.loginwindow</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.osascript" and anchor apple</string>
+						<key>Comment</key>
+						<string>osascript to loginwindow - end-of-run restart via `«event aevtrrst»` (onboardingProcess.sh:reboot).</string>
+						<key>Identifier</key>
+						<string>/usr/bin/osascript</string>
+						<key>IdentifierType</key>
+						<string>path</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.finder" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.finder</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
 						<string>identifier "com.apple.Terminal" and anchor apple</string>
 						<key>Comment</key>
-						<string>Terminal to Finder.</string>
+						<string>Terminal to Finder - wallpaper set via `tell Finder to set desktop picture` (apps.json).</string>
+						<key>Identifier</key>
+						<string>com.apple.Terminal</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.systemevents" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.systemevents</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.Terminal" and anchor apple</string>
+						<key>Comment</key>
+						<string>Terminal to System Events - hide-all-apps trick, CoreServicesUIAgent click loop, login items, notification clearing (JXA).</string>
+						<key>Identifier</key>
+						<string>com.apple.Terminal</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.systempreferences" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.systempreferences</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.Terminal" and anchor apple</string>
+						<key>Comment</key>
+						<string>Terminal to System Settings - `tell System Settings to activate / quit` in the screen-recording consent flow (apps.json).</string>
+						<key>Identifier</key>
+						<string>com.apple.Terminal</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+					</dict>
+					<dict>
+						<key>AEReceiverCodeRequirement</key>
+						<string>identifier "com.apple.loginwindow" and anchor apple</string>
+						<key>AEReceiverIdentifier</key>
+						<string>com.apple.loginwindow</string>
+						<key>AEReceiverIdentifierType</key>
+						<string>bundleID</string>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>identifier "com.apple.Terminal" and anchor apple</string>
+						<key>Comment</key>
+						<string>Terminal to loginwindow - end-of-run restart via `«event aevtrrst»` (onboardingProcess.sh:reboot).</string>
 						<key>Identifier</key>
 						<string>com.apple.Terminal</string>
 						<key>IdentifierType</key>
@@ -158,117 +427,9 @@
 						<key>CodeRequirement</key>
 						<string>identifier "com.apple.Terminal" and anchor apple</string>
 						<key>Comment</key>
-						<string>Terminal to SystemUIServer.</string>
+						<string>Terminal to SystemUIServer - manual/debug runs only.</string>
 						<key>Identifier</key>
 						<string>com.apple.Terminal</string>
-						<key>IdentifierType</key>
-						<string>bundleID</string>
-					</dict>
-					<dict>
-						<key>AEReceiverCodeRequirement</key>
-						<string>identifier "com.apple.systemevents" and anchor apple</string>
-						<key>AEReceiverIdentifier</key>
-						<string>com.apple.systemevents</string>
-						<key>AEReceiverIdentifierType</key>
-						<string>bundleID</string>
-						<key>Allowed</key>
-						<true/>
-						<key>CodeRequirement</key>
-						<string>identifier "com.apple.Terminal" and anchor apple</string>
-						<key>Comment</key>
-						<string>Terminal to System Events.</string>
-						<key>Identifier</key>
-						<string>com.apple.Terminal</string>
-						<key>IdentifierType</key>
-						<string>bundleID</string>
-					</dict>
-					<dict>
-						<key>AEReceiverCodeRequirement</key>
-						<string>identifier "com.apple.finder" and anchor apple</string>
-						<key>AEReceiverIdentifier</key>
-						<string>com.apple.finder</string>
-						<key>AEReceiverIdentifierType</key>
-						<string>bundleID</string>
-						<key>Allowed</key>
-						<true/>
-						<key>CodeRequirement</key>
-						<string>identifier "com.apple.bash" and anchor apple</string>
-						<key>Comment</key>
-						<string>/bin/bash to Finder.</string>
-						<key>Identifier</key>
-						<string>/bin/bash</string>
-						<key>IdentifierType</key>
-						<string>path</string>
-					</dict>
-					<dict>
-						<key>AEReceiverCodeRequirement</key>
-						<string>identifier "com.apple.systemevents" and anchor apple</string>
-						<key>AEReceiverIdentifier</key>
-						<string>com.apple.systemevents</string>
-						<key>AEReceiverIdentifierType</key>
-						<string>bundleID</string>
-						<key>Allowed</key>
-						<true/>
-						<key>CodeRequirement</key>
-						<string>identifier "com.apple.bash" and anchor apple</string>
-						<key>Comment</key>
-						<string>/bin/bash to System Events - defence-in-depth when TCC traces back to the parent shell.</string>
-						<key>Identifier</key>
-						<string>/bin/bash</string>
-						<key>IdentifierType</key>
-						<string>path</string>
-					</dict>
-					<dict>
-						<key>AEReceiverCodeRequirement</key>
-						<string>identifier "com.apple.finder" and anchor apple</string>
-						<key>AEReceiverIdentifier</key>
-						<string>com.apple.finder</string>
-						<key>AEReceiverIdentifierType</key>
-						<string>bundleID</string>
-						<key>Allowed</key>
-						<true/>
-						<key>CodeRequirement</key>
-						<string>identifier "com.apple.osascript" and anchor apple</string>
-						<key>Comment</key>
-						<string>osascript to Finder (wallpaper set via `tell Finder to set desktop picture`).</string>
-						<key>Identifier</key>
-						<string>com.apple.osascript</string>
-						<key>IdentifierType</key>
-						<string>bundleID</string>
-					</dict>
-					<dict>
-						<key>AEReceiverCodeRequirement</key>
-						<string>identifier "com.apple.systemevents" and anchor apple</string>
-						<key>AEReceiverIdentifier</key>
-						<string>com.apple.systemevents</string>
-						<key>AEReceiverIdentifierType</key>
-						<string>bundleID</string>
-						<key>Allowed</key>
-						<true/>
-						<key>CodeRequirement</key>
-						<string>identifier "com.apple.osascript" and anchor apple</string>
-						<key>Comment</key>
-						<string>osascript to System Events (hide-all-apps trick + CoreServicesUIAgent click loop).</string>
-						<key>Identifier</key>
-						<string>com.apple.osascript</string>
-						<key>IdentifierType</key>
-						<string>bundleID</string>
-					</dict>
-					<dict>
-						<key>AEReceiverCodeRequirement</key>
-						<string>identifier "com.apple.systempreferences" and anchor apple</string>
-						<key>AEReceiverIdentifier</key>
-						<string>com.apple.systempreferences</string>
-						<key>AEReceiverIdentifierType</key>
-						<string>bundleID</string>
-						<key>Allowed</key>
-						<true/>
-						<key>CodeRequirement</key>
-						<string>identifier "com.apple.osascript" and anchor apple</string>
-						<key>Comment</key>
-						<string>osascript to System Settings (`tell System Settings to activate / quit` in screen-recording consent flow).</string>
-						<key>Identifier</key>
-						<string>com.apple.osascript</string>
 						<key>IdentifierType</key>
 						<string>bundleID</string>
 					</dict>
@@ -277,7 +438,7 @@
 		</dict>
 	</array>
 	<key>PayloadDescription</key>
-	<string>Pre-approves the TCC permissions required by the macOS Onboarding Toolkit so AppleScript-driven steps (wallpaper, default-browser auto-click, notification clearing) run without invisible consent prompts.</string>
+	<string>Pre-approves the Accessibility and Apple Events permissions required by the macOS Onboarding Toolkit so its AppleScript-driven steps (wallpaper, default-browser auto-click, Notification Center clear, end-of-run restart) run without invisible consent prompts. Screen Recording is NOT covered - macOS does not allow MDM to pre-grant it, so the toolkit opens the Screen Recording pane for the user instead.</string>
 	<key>PayloadDisplayName</key>
 	<string>OTK PPPC Onboarding</string>
 	<key>PayloadIdentifier</key>

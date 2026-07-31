@@ -50,12 +50,44 @@ for dir in "${required_dirs[@]}"; do
 done
 # ----------------------------------------------------
 
-#Create TEMP_DIR in the context of the logged-in user
-current_user=$(stat -f "%Su" /dev/console)
-user_temp_dir=$(sudo -u "$current_user" getconf DARWIN_USER_TEMP_DIR | sed 's:/*$::')
-TEMP_DIR=$(mktemp -d "${user_temp_dir}/onboarding.XXXXXX")
-mkdir -p "$TEMP_DIR"
-chmod 755 "$TEMP_DIR"
+# TEMP_DIR lives in the console user's own temp container so SwiftDialog (which
+# runs as that user) can read the files we stage there.
+#
+# Deliberately NOT created at parse time. Under ADE the Intune agent can start
+# this script while the Mac is still in Setup Assistant, where /dev/console
+# belongs to `_mbsetupuser`; we would then stage every download inside that
+# account's container, which macOS tears down the moment Setup Assistant exits -
+# taking the in-flight installers with it. initialize_temp_dir() is called from
+# main() only after the user-session gate has confirmed a real console user.
+TEMP_DIR=""
+
+initialize_temp_dir() {
+  local console_user
+  console_user=$(stat -f "%Su" /dev/console)
+
+  local base
+  if [[ -z "$console_user" || "$console_user" == "root" || "$console_user" == "loginwindow" || "$console_user" == "_mbsetupuser" ]]; then
+    # Shouldn't happen post-gate; fall back rather than staging into a
+    # container that is about to disappear.
+    log_warn "Console user is '${console_user:-<none>}' - staging temp files under /tmp instead of a user container."
+    base=$(mktemp -d)
+  else
+    local user_temp_dir
+    user_temp_dir=$(sudo -u "$console_user" getconf DARWIN_USER_TEMP_DIR | sed 's:/*$::')
+    if [[ -z "$user_temp_dir" || ! -d "$user_temp_dir" ]]; then
+      log_warn "Could not resolve a temp container for '$console_user' - falling back to /tmp."
+      base=$(mktemp -d)
+    else
+      base=$(mktemp -d "${user_temp_dir}/onboarding.XXXXXX")
+    fi
+  fi
+
+  TEMP_DIR="$base"
+  mkdir -p "$TEMP_DIR"
+  # 755 so SwiftDialog, running as the console user, can read inside.
+  chmod 755 "$TEMP_DIR"
+  log_info "Temp directory: $TEMP_DIR"
+}
 
 #keep tally on the apps/configs
 export installed_count=0
@@ -151,6 +183,34 @@ main() {
     exit $EXIT_SUCCESS
   fi
 
+  # --- USER-SESSION GATE ---
+  # Nothing below this point is safe to run while the Mac is still in Setup
+  # Assistant: TEMP_DIR would land in the setup user's soon-to-vanish
+  # container, SwiftDialog has no session to draw into, and `user:` commands
+  # would target `_mbsetupuser`. This runs BEFORE prerequisites (which download
+  # into TEMP_DIR) and its result is enforced - the old call sat after
+  # prerequisites and discarded the return code, so a timed-out wait still
+  # marched on into the dialog.
+  #
+  # Silent runs get a short bounded wait and a clean exit instead of a long
+  # block: they only happen on already-onboarded machines (fleet config
+  # updates), where a Mac parked at the login window should quietly retry on
+  # the next cycle rather than hold a script slot open and fail loudly.
+  if [[ "$SILENT_MODE" == "true" ]]; then
+    if ! wait_for_user_session 300; then
+      log_info "No user session available for this silent run - exiting cleanly; the next deployment cycle will retry."
+      exit $EXIT_SUCCESS
+    fi
+  else
+    if ! wait_for_user_session; then
+      log_error "Aborting: the Mac never reached a usable desktop. No completion flag written."
+      exit $EXIT_GENERAL_ERROR
+    fi
+  fi
+
+  # Safe to stage files now that a real console user exists.
+  initialize_temp_dir
+
   # --- Process prerequisites from apps.json (no state/UI) ---
   if [[ "${DRY_RUN}" == "true" ]]; then
     log_info "Dry-run: skipping prerequisites phase"
@@ -161,9 +221,6 @@ main() {
   fi
 
   [[ "${DRY_RUN}" == "true" ]] && log_info "Dry-run: UI and progress will reflect simulation only"
-
-  # Wait for desktop to be ready
-  wait_for_desktop
 
   # Create a pseudo app_config object for global kill_apps_pre
   global_kill_config=$(jq -c '{name: "Global Cleanup", kill_apps: .global_settings.kill_apps_pre}' "$APPS_JSON")

@@ -40,6 +40,53 @@ log_debug() {
     return 0
 }
 
+# Emit a captured command-output file into the log, bounded and prefixed with
+# "  > " so it reads as quoted output rather than orchestrator lines.
+# Called by execute_commands (unified_installer.sh): "error" level on a failed
+# command so the tool's own message lands next to its exit code, "debug" on
+# success so a normal run stays readable. Bounded by OTK_CMD_OUTPUT_LINES
+# (default 40) because installer CLIs can emit thousands of progress lines.
+# Always returns 0 - it must never be the reason a caller's payload aborts.
+log_command_output() {
+    local out_file="${1:-}"
+    local level="${2:-debug}"
+    local max_lines="${OTK_CMD_OUTPUT_LINES:-40}"
+
+    # Nothing to do for debug-level output unless debugging is on
+    if [[ "$level" == "debug" && "${DEBUG:-false}" != "true" ]]; then
+        return 0
+    fi
+    [[ -z "$out_file" || ! -f "$out_file" ]] && return 0
+
+    if [[ ! -s "$out_file" ]]; then
+        [[ "$level" == "error" ]] && log_error "  > (no output on stdout/stderr)"
+        return 0
+    fi
+
+    local total
+    total=$(wc -l <"$out_file" 2>/dev/null | tr -d ' ')
+    [[ -z "$total" ]] && total=0
+
+    if ((total > max_lines)); then
+        if [[ "$level" == "error" ]]; then
+            log_error "  > output truncated - showing last $max_lines of $total lines"
+        else
+            log_debug "  > output truncated - showing last $max_lines of $total lines"
+        fi
+    fi
+
+    local line
+    while IFS= read -r line; do
+        if [[ "$level" == "error" ]]; then
+            log_error "  > $line"
+        else
+            log_debug "  > $line"
+        fi
+    done < <(tail -n "$max_lines" "$out_file" 2>/dev/null)
+
+    return 0
+}
+
 # Write a SwiftDialog-compatible status event to the log file.
 # Uses the "shell" preset format: [STATUS] <text>
 # SwiftDialog's logMonitor (preset: "shell") watches LOG_DIR/onboarding.log and

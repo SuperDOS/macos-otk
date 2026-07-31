@@ -938,3 +938,132 @@ EOF
       ;;
   esac
 }
+
+# -----------------------------------------------------------------------------
+# TeamViewer device assignment (idempotent)
+# -----------------------------------------------------------------------------
+# Wraps TeamViewerHost.app/Contents/Helpers/TeamViewer_Assignment. Two things
+# make the raw CLI unsafe to call directly from post_install_commands:
+#
+#   1. It returns the documented MDv2Assignment codes (400-409), but a shell
+#      only ever sees the low 8 bits - so 408 "Denied by policy" arrives as
+#      152 and 409 "Device already managed" arrives as 153. Anything that only
+#      tests `rc != 0` therefore treats an already-correctly-assigned device
+#      as a hard failure.
+#   2. execute_commands() returns on the first non-zero command, so that false
+#      failure also skips the remaining post_install_commands - including the
+#      breadcrumb the item's detection_commands look for. The item gets written
+#      `not_installed` and TeamViewer is re-downloaded and re-installed on
+#      every subsequent run of a machine that is perfectly healthy.
+#
+# Deliberately does NOT pass --reassign. --reassign asks TeamViewer to remove
+# the existing assignment first, and the "prevent assignment removal" policy in
+# the Management Console denies exactly that (408/152) - the failure this helper
+# exists to stop. Without it a device already carrying the same assignment ID
+# returns 409/153, which is success for our purposes.
+#
+# Usage:
+#   assign_teamviewer <assignment_id> [--alias <name>] [--retries N] [--wait N]
+assign_teamviewer() {
+  local assignment_id="" alias_name="" retries=3 wait_secs=120
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --alias)   alias_name="$2"; shift 2 ;;
+      --retries) retries="$2"; shift 2 ;;
+      --wait)    wait_secs="$2"; shift 2 ;;
+      *)
+        if [[ -z "$assignment_id" ]]; then
+          assignment_id="$1"
+        else
+          log_error "assign_teamviewer: unexpected argument: $1"
+          return 2
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z "$assignment_id" ]]; then
+    log_error "assign_teamviewer: assignment ID is required"
+    return 2
+  fi
+
+  # Overridable so the exit-code mapping can be exercised against a stub.
+  local tool="${OTK_TV_ASSIGNMENT_TOOL:-/Applications/TeamViewerHost.app/Contents/Helpers/TeamViewer_Assignment}"
+  if [[ ! -x "$tool" ]]; then
+    log_error "assign_teamviewer: assignment tool not found at $tool"
+    return 1
+  fi
+
+  # The tool talks to TeamViewer_Service over local IPC; calling it before the
+  # service is up yields 401 "service not running". Poll rather than sleep.
+  local waited=0
+  while ! pgrep -x TeamViewer_Service >/dev/null 2>&1; do
+    if ((waited >= wait_secs)); then
+      log_error "assign_teamviewer: TeamViewer_Service not running after ${wait_secs}s"
+      return 1
+    fi
+    sleep 5
+    waited=$((waited + 5))
+  done
+  log_debug "assign_teamviewer: TeamViewer_Service up after ${waited}s"
+
+  local args=(-verbose -assignment_id "$assignment_id")
+  [[ -n "$alias_name" ]] && args+=(-device_alias "$alias_name")
+
+  local attempt=1 rc=0 code=0 out=""
+  while :; do
+    rc=0
+    out=$("$tool" "${args[@]}" 2>&1) || rc=$?
+
+    # Normalize the shell-truncated status back to the documented code.
+    # 400-409 arrive as 144-153; the Linux/FreeBSD variants (40-49) pass
+    # through untruncated and are folded onto the same names.
+    if ((rc >= 144 && rc <= 153)); then
+      code=$((rc + 256))
+    elif ((rc >= 40 && rc <= 49)); then
+      code=$((rc + 360))
+    else
+      code=$rc
+    fi
+
+    case $code in
+      0)
+        log_info "TeamViewer assigned successfully"
+        [[ -n "$out" ]] && log_debug "assign_teamviewer: $out"
+        return 0
+        ;;
+      409)
+        # Same assignment ID already in place. Nothing to do, and nothing
+        # wrong - this is the steady state on every re-run.
+        log_info "TeamViewer already assigned to this assignment ID - skipping"
+        return 0
+        ;;
+      403 | 404 | 405)
+        # not online / already running / timeout - all transient.
+        if ((attempt >= retries)); then
+          log_error "assign_teamviewer: transient failure $code persisted after $attempt attempts"
+          [[ -n "$out" ]] && log_error "assign_teamviewer: $out"
+          return 1
+        fi
+        log_warn "assign_teamviewer: transient failure $code, retrying ($attempt/$retries)"
+        sleep $((attempt * 15))
+        attempt=$((attempt + 1))
+        ;;
+      408)
+        # Denied by policy. Reached only when TeamViewer had to remove an
+        # existing assignment - i.e. the device is assigned to a *different*
+        # ID and the Management Console policy forbids changing it. Not
+        # something the client can resolve, so surface it loudly.
+        log_error "assign_teamviewer: denied by policy (408) - this device is assigned to a different assignment ID and the active TeamViewer policy forbids removing it. Clear the assignment in the Management Console or disable that policy restriction."
+        [[ -n "$out" ]] && log_error "assign_teamviewer: $out"
+        return 1
+        ;;
+      *)
+        log_error "assign_teamviewer: assignment failed with code $code (raw exit $rc)"
+        [[ -n "$out" ]] && log_error "assign_teamviewer: $out"
+        return 1
+        ;;
+    esac
+  done
+}

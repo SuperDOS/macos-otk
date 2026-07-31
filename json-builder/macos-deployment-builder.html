@@ -2065,6 +2065,10 @@
       {
         label: 'show_action_dialog ...',
         template: "user:show_action_dialog --title 'Action required' --message 'Toggle on **Screen Recording** for these apps.\\n\\n- Edge\\n- Chrome\\n\\nClick **Done** when finished.' --timer 600"
+      },
+      {
+        label: 'assign_teamviewer <assignment_id>',
+        template: 'root:assign_teamviewer YOUR_ASSIGNMENT_ID'
       }
     ];
 
@@ -2704,9 +2708,13 @@
           icon: "teamviewer.png",
           download_url: "https://dl.teamviewer.com/download/version_15x/Install%20TeamViewerHost.pkg",
           download_path: "TeamViewerHost.pkg",
+          // assign_teamviewer waits for TeamViewer_Service itself and treats
+          // "already assigned" (return code 409) as success, so the item stays
+          // idempotent across re-runs. Calling TeamViewer_Assignment directly
+          // fails every re-run instead. Never add --reassign: the Management
+          // Console's "prevent assignment removal" policy denies it (408).
           post_install_commands: [
-            "root:sleep 60",
-            "root:/Applications/TeamViewerHost.app/Contents/Helpers/TeamViewer_Assignment -assignment_id $ASSIGNMENT_ID"
+            "root:assign_teamviewer $ASSIGNMENT_ID"
           ],
           custom_variables: {
             ASSIGNMENT_ID: "123456789abcdef0123456789abcdef" // replace with your actual assignment ID from the TeamViewer Management Console
